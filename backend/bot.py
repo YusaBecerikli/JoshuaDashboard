@@ -177,7 +177,7 @@ async def execute_action(action: str, data: dict):
 
 
 async def main():
-    await dp.start_polling(bot)
+    await dp.start_polling(bot, handle_signals=False)
 
 
 if __name__ == "__main__":
