@@ -10,8 +10,17 @@ export default function SettingsPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState("");
+  const [aiModel, setAiModel] = useState("llama-3.3-70b-versatile");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  const models = [
+    { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (Varsayılan)" },
+    { value: "llama-3.1-8b-instant", label: "Llama 3.1 8B (Hızlı)" },
+    { value: "mixtral-8x7b-32768", label: "Mixtral 8x7B" },
+    { value: "gemma2-9b-it", label: "Gemma 2 9B" },
+    { value: "deepseek-r1-distill-llama-70b", label: "DeepSeek R1 Distill 70B" },
+  ];
 
   useEffect(() => {
     if (localStorage.getItem("settings_unlocked") === "true") {
@@ -23,6 +32,7 @@ export default function SettingsPage() {
     if (authenticated) {
       api.settings().then((s) => {
         setSystemPrompt(s.system_prompt || "");
+        setAiModel(s.ai_model || "llama-3.3-70b-versatile");
       });
     }
   }, [authenticated]);
@@ -41,6 +51,7 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     await api.updateSetting({ key: "system_prompt", value: systemPrompt });
+    await api.updateSetting({ key: "ai_model", value: aiModel });
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -101,7 +112,23 @@ export default function SettingsPage() {
           </div>
         </motion.header>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass p-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-2">AI Modeli</h2>
+          <p className="text-xs text-gray-500 mb-4">
+            Botun kullandığı yapay zeka modeli. Değişiklikler anında uygulanır.
+          </p>
+          <select
+            value={aiModel}
+            onChange={(e) => setAiModel(e.target.value)}
+            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-accent"
+          >
+            {models.map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass p-6">
           <h2 className="text-lg font-semibold mb-2">Sistem Promptu</h2>
           <p className="text-xs text-gray-500 mb-4">
             Telegram botunun AI davranışını belirler. Değişiklikler anında uygulanır.

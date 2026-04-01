@@ -30,7 +30,7 @@ Aksiyonlar:
 - daily_plan: {"tasks": [{"title": str, "done": bool, "priority": str}], "mood": int}
 - income_add: {"platform": str, "amount": float, "month": "YYYY-MM"}
 - exam_score_add: {"exam_type": "TYT"|"AYT", "subject": str, "net_score": float}
-- reminder_add: {"message": str, "remind_at": "YYYY-MM-DD HH:MM"}
+- reminder_add: {"message": str, "remind_at": str}  ← "5dk sonra", "2 saat sonra", "yarın 09:00" gibi yaz, sistem çevirir
 - delete_last: {"table": str}
 - module_add: {"module_key": str, "title": str, "schema": object}
 - chat: {}
@@ -52,13 +52,24 @@ async def get_system_prompt():
     return DEFAULT_SYSTEM_PROMPT
 
 
+async def get_ai_model():
+    try:
+        result = supabase.table("settings").select("value").eq("key", "ai_model").execute()
+        if result.data:
+            return result.data[0]["value"]
+    except:
+        pass
+    return "llama-3.3-70b-versatile"
+
+
 async def process(message: str, context: dict) -> dict:
     system_prompt = await get_system_prompt()
+    model = await get_ai_model()
     context_str = json.dumps(context, ensure_ascii=False, indent=2)
     prompt = system_prompt.replace("{CONTEXT}", context_str)
 
     response = await client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model=model,
         messages=[
             {"role": "system", "content": prompt},
             {"role": "user", "content": message},

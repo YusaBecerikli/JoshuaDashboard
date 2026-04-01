@@ -117,7 +117,8 @@ CREATE TABLE IF NOT EXISTS settings (
 
 INSERT INTO settings (key, value) VALUES
 ('system_prompt', 'Sen Joshua''nın kişisel asistanısın. Arkadaş gibi konuş. Türkçe. Kısa ve direkt.'),
-('dashboard_version', '2')
+('dashboard_version', '2'),
+('ai_model', 'llama-3.3-70b-versatile')
 ON CONFLICT (key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS exam_scores (

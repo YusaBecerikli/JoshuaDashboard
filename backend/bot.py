@@ -113,6 +113,48 @@ async def handle_message(message: types.Message):
     await message.answer(reply)
 
 
+def parse_remind_time(raw: str) -> str:
+    """Convert relative time strings to absolute timestamps."""
+    import re
+    now = datetime.utcnow()
+    
+    # Already absolute: "2026-04-01 14:30"
+    if re.match(r"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}", raw):
+        return raw
+    
+    # "5dk sonra", "5 dakika sonra"
+    m = re.search(r"(\d+)\s*(?:dk|dakika|min)\s*sonra", raw)
+    if m:
+        delta = now + timedelta(minutes=int(m.group(1)))
+        return delta.strftime("%Y-%m-%d %H:%M:%S")
+    
+    # "2 saat sonra"
+    m = re.search(r"(\d+)\s*(?:sa|saat)\s*sonra", raw)
+    if m:
+        delta = now + timedelta(hours=int(m.group(1)))
+        return delta.strftime("%Y-%m-%d %H:%M:%S")
+    
+    # "yarın 09:00"
+    m = re.search(r"yarın\s*(\d{1,2}):(\d{2})", raw)
+    if m:
+        tomorrow = now + timedelta(days=1)
+        return tomorrow.replace(hour=int(m.group(1)), minute=int(m.group(2)), second=0).strftime("%Y-%m-%d %H:%M:%S")
+    
+    # "bugün 15:00"
+    m = re.search(r"bugün\s*(\d{1,2}):(\d{2})", raw)
+    if m:
+        return now.replace(hour=int(m.group(1)), minute=int(m.group(2)), second=0).strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Fallback: try to parse as-is
+    try:
+        return datetime.fromisoformat(raw).strftime("%Y-%m-%d %H:%M:%S")
+    except:
+        pass
+    
+    # Last resort: 1 hour from now
+    return (now + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+
+
 async def execute_action(action: str, data: dict):
     if action == "budget_add":
         supabase.table("budget").insert({
@@ -205,9 +247,11 @@ async def execute_action(action: str, data: dict):
             "net_score": data.get("net_score"),
         }).execute()
     elif action == "reminder_add":
+        raw_time = data.get("remind_at", "")
+        remind_at = parse_remind_time(raw_time)
         supabase.table("reminders").insert({
             "message": data.get("message"),
-            "remind_at": data.get("remind_at"),
+            "remind_at": remind_at,
         }).execute()
     elif action == "delete_last":
         table = data.get("table", "")
