@@ -18,6 +18,9 @@ Kişisel yaşamını takip eden, web dashboard'dan görüntülenebilen ve Telegr
 - 🔒 **Şifre Koruması** — Site ve ayarlar ayrı şifreli
 - 📅 **Tarih Navigasyonu** — Geçmiş gün verilerini görüntüle
 - 🗑️ **Veri Silme** — Telegram'dan "son kaydı sil"
+- 🧠 **Uzun Süreli Bellek** — Markdown tabanlı profil, bilgi bankası, konuşma geçmişi
+- 👁️ **Görüntü Analizi** — Fotoğraf gönder, AI analiz etsin
+- 🤖 **Proaktif Watcher** — Saat başı durum analizi, otomatik mesaj
 
 ## Teknoloji Stack
 

@@ -138,3 +138,56 @@ CREATE TABLE IF NOT EXISTS reminders (
   sent BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS memory (
+  key VARCHAR(50) PRIMARY KEY,
+  content TEXT,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+INSERT INTO memory (key, content) VALUES
+('profile', '# Joshua — Profil
+
+## Kişisel Bilgiler
+- Ad: Muhammed Yuşa Becerikli (Joshua)
+- Yaş: 17
+- Konum: Bingöl
+- Hedef: Sabancı Üniversitesi Bilgisayar Mühendisliği
+- Sınav: YKS (Haziran 2026)
+
+## Tercihler
+
+
+## Öğrenme Stili
+
+
+## Güçlü/Zayıf Yönler
+
+
+## Notlar
+'),
+('knowledge', '# Bilgi Bankası
+
+## Konu Bilgileri
+
+
+## Pratik Bilgiler
+
+
+## Keşfedilen Kaynaklar
+
+
+## Notlar
+'),
+('history_summary', '# Konuşma Özeti
+
+## Son Önemli Etkileşimler
+
+
+## Gelişmeler
+
+
+## Açık Konular
+
+')
+ON CONFLICT (key) DO NOTHING;

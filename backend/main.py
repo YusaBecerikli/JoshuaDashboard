@@ -1,8 +1,15 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import budget, study, sleep, habits, goals, income, social, daily, modules, dashboard, scores, reminders, settings, charts
 import asyncio
 import threading
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+)
+logger = logging.getLogger("main")
 
 app = FastAPI(title="Joshua Dashboard API")
 
@@ -46,10 +53,11 @@ def start_bot():
         from bot import main
         asyncio.run(main())
     except Exception as e:
-        print(f"Bot başlatılamadı: {e}")
+        logger.error(f"Bot başlatılamadı: {e}", exc_info=True)
 
 
 @app.on_event("startup")
 async def startup():
+    logger.info("Starting bot in background thread...")
     bot_thread = threading.Thread(target=start_bot, daemon=True)
     bot_thread.start()
