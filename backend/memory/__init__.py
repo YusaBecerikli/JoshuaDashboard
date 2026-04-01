@@ -104,9 +104,18 @@ def _update_section(current: str, section: str, content: str) -> str:
 
 def init_memory():
     """Ensure all default memory keys exist in Supabase."""
-    _ensure_memory_exists("profile", DEFAULT_PROFILE)
-    _ensure_memory_exists("knowledge", DEFAULT_KNOWLEDGE)
-    _ensure_memory_exists("history_summary", DEFAULT_HISTORY)
+    for key, default in [
+        ("profile", DEFAULT_PROFILE),
+        ("knowledge", DEFAULT_KNOWLEDGE),
+        ("history_summary", DEFAULT_HISTORY),
+    ]:
+        try:
+            result = supabase.table("memory").select("key").eq("key", key).execute()
+            if not result.data:
+                supabase.table("memory").upsert({"key": key, "content": default}).execute()
+                logger.info(f"Memory initialized: {key}")
+        except Exception as e:
+            logger.error(f"Memory init error ({key}): {e}")
 
 
 def read_profile() -> str:

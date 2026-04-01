@@ -52,25 +52,26 @@ async def get_available_models():
             )
             if resp.status_code == 200:
                 models = resp.json().get("data", [])
-                # Filter: only active, chat-capable models
                 chat_models = []
                 vision_models = []
+                skip_keywords = ["whisper", "distill", "nomic", "llama-guard"]
                 for m in models:
                     mid = m.get("id", "")
                     active = m.get("active", True)
                     if not active:
                         continue
+                    if any(kw in mid.lower() for kw in skip_keywords):
+                        continue
+                    label = mid.replace("meta-llama/", "").replace("mistralai/", "").replace("google/", "").replace("thudm/", "")
                     # Vision models
-                    if any(kw in mid.lower() for kw in ["vision", "maverick", "scout", "11b", "90b"]):
-                        if "maverick" in mid.lower() or "scout" in mid.lower() or "vision" in mid.lower():
-                            vision_models.append({"id": mid, "name": mid.replace("meta-llama/", "").replace("llama-", "Llama ")})
-                    # Chat models (exclude vision from normal list)
-                    elif any(kw in mid.lower() for kw in ["70b", "8b", "mixtral", "gemma", "deepseek"]):
-                        if "distill" not in mid.lower():  # skip decommissioned deepseek distill
-                            chat_models.append({"id": mid, "name": mid.replace("meta-llama/", "").replace("llama-", "Llama ")})
+                    if any(kw in mid.lower() for kw in ["vision", "maverick", "scout"]):
+                        vision_models.append({"id": mid, "name": label})
+                    # Everything else is a chat model
+                    else:
+                        chat_models.append({"id": mid, "name": label})
                 return {
-                    "chat": chat_models,
-                    "vision": vision_models,
+                    "chat": sorted(chat_models, key=lambda x: x["name"]),
+                    "vision": sorted(vision_models, key=lambda x: x["name"]),
                 }
             return {"chat": [], "vision": [], "error": f"Groq API {resp.status_code}"}
     except Exception as e:
