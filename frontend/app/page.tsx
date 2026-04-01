@@ -11,6 +11,7 @@ import GoalsModule from "@/components/modules/GoalsModule";
 import IncomeModule from "@/components/modules/IncomeModule";
 import SocialModule from "@/components/modules/SocialModule";
 import DailyPlanModule from "@/components/modules/DailyPlanModule";
+import CountdownsModule from "@/components/modules/CountdownsModule";
 import CustomModuleCard from "@/components/CustomModuleCard";
 
 function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
@@ -207,6 +208,7 @@ export default function Home() {
           <GoalsModule />
           <IncomeModule />
           <SocialModule />
+          <CountdownsModule />
           {customModules.map((mod) => (
             <CustomModuleCard key={mod.module_key} module={mod} />
           ))}

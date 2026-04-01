@@ -1,7 +1,8 @@
 import logging
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import budget, study, sleep, habits, goals, income, social, daily, modules, dashboard, scores, reminders, settings, charts
+from routes import budget, study, sleep, habits, goals, income, social, daily, modules, dashboard, scores, reminders, settings, charts, notes, countdowns
 import asyncio
 import threading
 
@@ -35,6 +36,8 @@ app.include_router(scores.router)
 app.include_router(reminders.router)
 app.include_router(settings.router)
 app.include_router(charts.router)
+app.include_router(notes.router)
+app.include_router(countdowns.router)
 
 
 @app.get("/")
@@ -45,6 +48,18 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+
+async def keep_alive():
+    """Ping localhost every 5 minutes to prevent Render from sleeping."""
+    while True:
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.get("http://localhost:10000/health", timeout=5)
+            logger.debug("Keep-alive ping sent")
+        except Exception as e:
+            logger.debug(f"Keep-alive ping failed: {e}")
+        await asyncio.sleep(300)
 
 
 def start_bot():
@@ -61,3 +76,7 @@ async def startup():
     logger.info("Starting bot in background thread...")
     bot_thread = threading.Thread(target=start_bot, daemon=True)
     bot_thread.start()
+
+    # Keep Render awake
+    asyncio.create_task(keep_alive())
+    logger.info("Keep-alive task started (prevents Render sleep)")

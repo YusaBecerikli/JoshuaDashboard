@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from ai import process, watcher_analyze
 from ai import _execute_memory_action
 from database import supabase, get_today_summary
-from memory import append_history, init_memory
+from memory import append_history, init_memory, read_profile, read_knowledge, read_history
 
 load_dotenv()
 
@@ -41,6 +41,14 @@ TABLE_MAP = {
     "net": "exam_scores",
     "score": "exam_scores",
 }
+
+QUICK_COMMANDS = [
+    ("📊 Durum", "durum"),
+    ("💰 Bakiye", "bakiye ne kadar"),
+    ("📚 Bugün kaç saat çalıştım", "bugün kaç saat çalıştım"),
+    ("📝 Notlarım", "notlarımı göster"),
+    ("⏳ Geri sayımlar", "geri sayımları göster"),
+]
 
 
 def _sync_db_call(func):
@@ -113,14 +121,67 @@ async def handle_photo(message: types.Message):
 async def cmd_start(message: types.Message):
     if message.from_user.id != ALLOWED_USER_ID:
         return
-    await message.answer("Selam Joshua! Ben senin kişisel asistanın. Bana her şeyi yazabilirsin:\n\n"
-                         "• 'Bugün 3 saat matematik çalıştım'\n"
-                         "• 'Dün gece 01:30'da yattım'\n"
-                         "• '50 lira yemek yedim'\n"
-                         "• 'Kitap okuma alışkanlığı ekle'\n"
-                         "• 'TYT matematik 28.5 net'\n"
-                         "• 'Yarın 09:00'da matematik çalışmayı hatırlat'\n"
-                         "• 'Son kaydı sil'")
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(text=label, callback_data=f"quick:{cmd}") for label, cmd in QUICK_COMMANDS[:3]],
+        [types.InlineKeyboardButton(text=label, callback_data=f"quick:{cmd}") for label, cmd in QUICK_COMMANDS[3:]],
+    ])
+    await message.answer(
+        "Selam Joshua! Ben senin kişisel asistanın. Bana her şeyi yazabilirsin:\n\n"
+        "• 'Bugün 3 saat matematik çalıştım'\n"
+        "• 'Dün gece 01:30'da yattım'\n"
+        "• '50 lira yemek yedim'\n"
+        "• 'Kitap okuma alışkanlığı ekle'\n"
+        "• 'TYT matematik 28.5 net'\n"
+        "• 'Yarın 09:00'da matematik çalışmayı hatırlat'\n"
+        "• 'Son kaydı sil'\n"
+        "• '/not [yazılacak şey]'",
+        reply_markup=keyboard,
+    )
+
+
+@dp.callback_query(lambda c: c.data and c.data.startswith("quick:"))
+async def handle_quick_command(callback: types.CallbackQuery):
+    cmd = callback.data.split(":", 1)[1]
+    await callback.answer()
+
+    if cmd == "durum":
+        await cmd_status(callback.message)
+    elif cmd == "bakiye ne kadar":
+        ctx = get_today_summary()
+        await callback.message.answer(f"💰 Bakiye: {ctx['balance']} TL")
+    elif cmd == "bugün kaç saat çalıştım":
+        ctx = get_today_summary()
+        hours = ctx["study_minutes"] / 60
+        await callback.message.answer(f"📚 Bugün {hours:.1f} saat çalıştın")
+    elif cmd == "notlarımı göster":
+        notes = await _sync_db_call(lambda: supabase.table("notes").select("*").order("id", desc=True).limit(10).execute())
+        if notes.data:
+            text = "📝 Notların:\n\n" + "\n\n".join(f"• {n['content']}" for n in notes.data)
+        else:
+            text = "Henüz not yok. /not komutuyla ekle."
+        await callback.message.answer(text)
+    elif cmd == "geri sayımları göster":
+        countdowns = await _sync_db_call(lambda: supabase.table("countdowns").select("*").order("target_date").execute())
+        if countdowns.data:
+            text = "⏳ Geri Sayımlar:\n\n"
+            for c in countdowns.data:
+                days = (datetime.strptime(c["target_date"], "%Y-%m-%d").date() - datetime.now().date()).days
+                text += f"{c.get('emoji', '⏳')} {c['title']}: {days} gün kaldı\n"
+        else:
+            text = "Henüz geri sayım yok."
+        await callback.message.answer(text)
+
+
+@dp.message(Command("not"))
+async def cmd_note(message: types.Message):
+    if message.from_user.id != ALLOWED_USER_ID:
+        return
+    content = message.text.replace("/not ", "").strip()
+    if not content or content == "/not":
+        await message.answer("Kullanım: /not [not içeriği]")
+        return
+    await _sync_db_call(lambda: supabase.table("notes").insert({"content": content}).execute())
+    await message.answer("📝 Not kaydedildi.")
 
 
 @dp.message(Command("durum"))
@@ -329,6 +390,17 @@ async def execute_action(action: str, data: dict):
                     if result.data:
                         await _sync_db_call(lambda t=tbl, rid=result.data[0]["id"]: supabase.table(t).delete().eq("id", rid).execute())
                     break
+    elif action == "note_add":
+        await _sync_db_call(lambda: supabase.table("notes").insert({
+            "content": data.get("content"),
+            "tags": data.get("tags", []),
+        }).execute())
+    elif action == "countdown_add":
+        await _sync_db_call(lambda: supabase.table("countdowns").insert({
+            "title": data.get("title"),
+            "target_date": data.get("target_date"),
+            "emoji": data.get("emoji", "⏳"),
+        }).execute())
 
 
 async def check_reminders():
@@ -368,9 +440,93 @@ async def watcher_task():
         await asyncio.sleep(3600)
 
 
+async def weekly_summary():
+    """Send weekly summary every Sunday at 21:00."""
+    while True:
+        try:
+            now = datetime.now()
+            if now.weekday() == 6 and now.hour == 21:  # Sunday 21:00
+                # Check if already sent today
+                last_sent = await _sync_db_call(
+                    lambda: supabase.table("settings").select("value").eq("key", "last_weekly_summary").execute()
+                )
+                if last_sent.data and last_sent.data[0]["value"] == now.strftime("%Y-%m-%d"):
+                    await asyncio.sleep(3600)
+                    continue
+
+                # Gather week data
+                week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+                today = now.strftime("%Y-%m-%d")
+
+                study = await _sync_db_call(
+                    lambda: supabase.table("study_sessions").select("duration_minutes, net_count").gte("date", week_ago).lte("date", today).execute()
+                )
+                total_hours = sum(r["duration_minutes"] or 0 for r in study.data) / 60
+                nets = [r["net_count"] for r in study.data if r.get("net_count")]
+                avg_net = round(sum(nets) / len(nets), 1) if nets else 0
+
+                budget = await _sync_db_call(
+                    lambda: supabase.table("budget").select("type, amount").gte("date", week_ago).lte("date", today).execute()
+                )
+                income = sum(r["amount"] or 0 for r in budget.data if r["type"] == "income")
+                expense = sum(r["amount"] or 0 for r in budget.data if r["type"] == "expense")
+
+                habits = await _sync_db_call(
+                    lambda: supabase.table("habit_logs").select("completed").gte("date", week_ago).lte("date", today).execute()
+                )
+                done = sum(1 for r in habits.data if r.get("completed"))
+                total = len(habits.data) or 1
+
+                msg = (
+                    f"📊 Haftalık Özet ({week_ago} → {today}):\n\n"
+                    f"📚 {total_hours:.1f} saat çalışma | Ort. net: {avg_net}\n"
+                    f"💰 Gelir: {income} TL | Gider: {expense} TL\n"
+                    f"✅ Alışkanlıklar: {done}/{total} tamamlandı\n\n"
+                    f"İyi hafta Joshua! 💪"
+                )
+                await bot.send_message(ALLOWED_USER_ID, msg)
+
+                await _sync_db_call(
+                    lambda: supabase.table("settings").upsert({
+                        "key": "last_weekly_summary",
+                        "value": now.strftime("%Y-%m-%d"),
+                    }).execute()
+                )
+                logger.info("Weekly summary sent")
+        except Exception as e:
+            logger.error(f"Weekly summary error: {e}")
+        await asyncio.sleep(3600)
+
+
+async def motivation_watcher():
+    """Send motivation messages when study hours are low."""
+    while True:
+        try:
+            now = datetime.now()
+            # Check at 20:00 every day
+            if now.hour == 20:
+                ctx = get_today_summary()
+                study_hours = ctx["study_minutes"] / 60
+
+                if study_hours < 2:
+                    messages = [
+                        "Bugün biraz az çalıştın gibi. Yarın daha iyi olacak, merak etme 💪",
+                        "Her gün mükemmel olmak zorunda değilsin. Önemli olan devam etmek 🔥",
+                        "Bugün hafif geçti ama yarın yeni bir sayfa. Hadi yapalım bunu 📚",
+                    ]
+                    import random
+                    await bot.send_message(ALLOWED_USER_ID, random.choice(messages))
+                    logger.info("Motivation message sent")
+        except Exception as e:
+            logger.error(f"Motivation watcher error: {e}")
+        await asyncio.sleep(3600)
+
+
 async def main():
     asyncio.create_task(check_reminders())
     asyncio.create_task(watcher_task())
+    asyncio.create_task(weekly_summary())
+    asyncio.create_task(motivation_watcher())
     try:
         await asyncio.to_thread(init_memory)
     except Exception as e:

@@ -16,9 +16,61 @@ client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 VISION_MODEL = "llama-4-maverick-17b-128e-instruct"
 FALLBACK_MODEL = "llama-3.3-70b-versatile"
 
+# Model fallback chain: if one fails, try the next
+MODEL_FALLBACK_CHAIN = [
+    FALLBACK_MODEL,
+    "llama-3.1-8b-instant",
+    "mixtral-8x7b-32768",
+    "gemma2-9b-it",
+]
+
 
 async def get_vision_model() -> str:
     return await asyncio.to_thread(_sync_get_setting, "vision_model", VISION_MODEL)
+
+
+async def _call_groq(model: str, messages: list, temperature: float, max_tokens: int):
+    """Call Groq API with automatic model fallback on token/limit errors."""
+    tried = set()
+    current_model = model
+
+    while True:
+        if current_model in tried:
+            # All models exhausted
+            return None, f"All models failed for this request"
+
+        tried.add(current_model)
+        try:
+            resp = await client.chat.completions.create(
+                model=current_model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return resp, None
+        except Exception as e:
+            error_str = str(e)
+            logger.warning(f"Model {current_model} failed: {error_str[:150]}")
+
+            # Determine fallback reason
+            if any(kw in error_str for kw in ["context_length", "rate_limit", "quota", "insufficient", "model_not_found", "decommissioned"]):
+                # Find next available model in fallback chain
+                next_model = None
+                for m in MODEL_FALLBACK_CHAIN:
+                    if m not in tried:
+                        next_model = m
+                        break
+                if next_model:
+                    logger.info(f"Switching from {current_model} → {next_model}")
+                    current_model = next_model
+                    continue
+                else:
+                    return None, f"No fallback models available. Last error: {error_str[:200]}"
+            else:
+                # Unknown error, don't waste fallbacks
+                return None, error_str
+
+    return None, "Unexpected loop exit"
 
 DEFAULT_SYSTEM_PROMPT = """Sen Joshua'nın (Muhammed Yuşa Becerikli) kişisel asistanısın. 17 yaşında, Bingöl'de yaşıyor, Haziran'da YKS var, hedefi Sabancı Üniversitesi Bilgisayar Mühendisliği.
 
@@ -199,6 +251,8 @@ Aksiyonlar:
 - module_add: {"module_key": str, "title": str, "schema": object}
 - update_memory: {"file": "profile"|"knowledge"|"history", "section": str, "content": str}
 - summarize: {"summary": str}
+- note_add: {"content": str, "tags": [str]}
+- countdown_add: {"title": str, "target_date": "YYYY-MM-DD", "emoji": str}
 - chat: {}
 
 Format (SADECE JSON, başka hiçbir şey):
@@ -232,71 +286,18 @@ async def process(message: str, context: dict, image_url: Optional[str] = None) 
         {"role": "user", "content": user_content},
     ]
 
-    try:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0.3,
-            max_tokens=500,
-        )
-    except Exception as e:
-        error_str = str(e)
-        # Model not found or decommissioned → try fallback
-        if "model_not_found" in error_str or "decommissioned" in error_str or "model_decommissioned" in error_str:
-            if image_url:
-                # Vision model failed → try chat model with image
-                logger.warning(f"Vision model {model} unavailable, trying chat model with image")
-                fallback = await get_ai_model()
-                try:
-                    response = await client.chat.completions.create(
-                        model=fallback,
-                        messages=messages,
-                        temperature=0.3,
-                        max_tokens=500,
-                    )
-                except Exception as e2:
-                    # Even chat model can't handle image → describe it textually
-                    logger.warning(f"Chat model {fallback} also can't handle image, falling back to text-only")
-                    messages[1]["content"] = [{"type": "text", "text": f"(Fotoğraf gönderildi ama vision modeli şu an çalışmıyor. Kullanıcı mesajı: {message or 'Sadece fotoğraf'})"}]
-                    try:
-                        response = await client.chat.completions.create(
-                            model=fallback,
-                            messages=messages,
-                            temperature=0.3,
-                            max_tokens=500,
-                        )
-                    except Exception as e3:
-                        logger.error(f"All models failed: {e3}")
-                        return {
-                            "action": "chat",
-                            "data": {},
-                            "reply": "Vision modeli şu an çalışmıyor. Ayarlardan farklı bir model seç.",
-                        }
-            else:
-                # Chat model failed
-                logger.warning(f"Model {model} unavailable, falling back to {FALLBACK_MODEL}")
-                try:
-                    await asyncio.to_thread(
-                        lambda: supabase.table("settings").upsert({
-                            "key": "ai_model",
-                            "value": FALLBACK_MODEL,
-                        }).execute()
-                    )
-                    response = await client.chat.completions.create(
-                        model=FALLBACK_MODEL,
-                        messages=messages,
-                        temperature=0.3,
-                        max_tokens=500,
-                    )
-                except Exception as e2:
-                    logger.error(f"Groq API error (fallback also failed): {e2}")
-                    return {
-                        "action": "chat",
-                        "data": {},
-                        "reply": "AI servisinde sorun var, sonra dene.",
-                    }
-        else:
-            logger.error(f"Groq API error: {e}")
+    # Try primary model with automatic fallback chain
+    response, err = await _call_groq(model, messages, 0.3, 500)
+
+    if response is None:
+        # Last resort: text-only fallback for vision requests
+        if image_url:
+            logger.warning("All models failed for vision, trying text-only")
+            messages[1]["content"] = [{"type": "text", "text": f"(Fotoğraf gönderildi ama vision modeli çalışmıyor. Mesaj: {message or 'Sadece fotoğraf'})"}]
+            response, err = await _call_groq(FALLBACK_MODEL, messages, 0.3, 500)
+
+        if response is None:
+            logger.error(f"Groq API error: {err}")
             return {
                 "action": "chat",
                 "data": {},

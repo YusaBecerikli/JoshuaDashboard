@@ -192,3 +192,22 @@ INSERT INTO memory (key, content) VALUES
 
 ')
 ON CONFLICT (key) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS notes (
+  id SERIAL PRIMARY KEY,
+  content TEXT,
+  tags TEXT[],
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS countdowns (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(200),
+  target_date DATE,
+  emoji VARCHAR(10) DEFAULT '⏳',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+INSERT INTO countdowns (title, target_date, emoji) VALUES
+('YKS 2026', '2026-06-20', '🎓')
+ON CONFLICT DO NOTHING;
