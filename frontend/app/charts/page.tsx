@@ -56,7 +56,7 @@ export default function ChartsPage() {
 
   const sleepAvg = sleepData.length > 0
     ? (sleepData.filter((d: any) => d.duration_hours).reduce((s: number, d: any) => s + d.duration_hours, 0) / sleepData.filter((d: any) => d.duration_hours).length).toFixed(1)
-    : 0;
+    : "0";
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Yükleniyor...</div>;
 
