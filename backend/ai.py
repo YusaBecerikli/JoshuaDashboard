@@ -169,11 +169,51 @@ def _execute_memory_action(action: str, data: dict):
             logger.info("History summarized")
 
 
+ACTION_INSTRUCTIONS = """
+
+KRİTİK KURALLAR:
+- Kullanıcı veri söylediğinde ÖNCE aksiyonu çalıştır, sonra kısa cevap ver
+- Geçmiş zaman ("çalıştım", "uyudum") → direkt aksiyon
+- Gelecek zaman ("çalışacağım") → goal veya chat
+- Maksimum 1 soru sor, 0 daha iyi
+- Sağlık/ahlak dersi verme
+- "uzatma", "sadece kaydet" derlerse kısa kes
+- "nasılsın" → max 3 kelime cevap
+- Belirsiz mesajda en mantıklı aksiyonu tahmin et, sorma
+- Fotoğraf gönderilirse önce fotoğrafı analiz et, sonra aksiyon belirle
+- Kullanıcı hakkında kalıcı bilgi öğrenirsen update_memory aksiyonu kullan
+
+Aksiyonlar:
+- budget_add: {"type": "income"|"expense", "category": str, "amount": float, "description": str}
+- study_add: {"subject": str, "topic": str, "duration_minutes": int, "net_count": float}
+- sleep_log: {"sleep_time": "HH:MM", "wake_time": "HH:MM", "quality": int}
+- habit_log: {"habit_name": str, "completed": bool}
+- habit_add: {"name": str, "emoji": str, "frequency": "daily"|"weekly"}
+- goal_update: {"title": str, "progress": int, "status": str}
+- social_note: {"person_name": str, "relationship": str, "note": str}
+- daily_plan: {"tasks": [{"title": str, "done": bool, "priority": str}], "mood": int}
+- income_add: {"platform": str, "amount": float, "month": "YYYY-MM"}
+- exam_score_add: {"exam_type": "TYT"|"AYT", "subject": str, "net_score": float}
+- reminder_add: {"message": str, "remind_at": str}
+- delete_last: {"table": str}
+- module_add: {"module_key": str, "title": str, "schema": object}
+- update_memory: {"file": "profile"|"knowledge"|"history", "section": str, "content": str}
+- summarize: {"summary": str}
+- chat: {}
+
+Format (SADECE JSON, başka hiçbir şey):
+{"action": "action_tipi", "data": {...}, "reply": "kısa türkçe cevap"}
+"""
+
+
 async def process(message: str, context: dict, image_url: Optional[str] = None) -> dict:
     system_prompt = await get_system_prompt()
     memory = await asyncio.to_thread(get_all_memory)
     context_str = json.dumps(context, ensure_ascii=False, indent=2)
-    prompt = system_prompt.replace("{MEMORY}", memory).replace("{CONTEXT}", context_str)
+
+    # Always append action instructions to whatever prompt is in Supabase
+    full_prompt = system_prompt + ACTION_INSTRUCTIONS
+    full_prompt = full_prompt.replace("{MEMORY}", memory).replace("{CONTEXT}", context_str)
 
     if image_url:
         model = await get_vision_model()
@@ -185,10 +225,10 @@ async def process(message: str, context: dict, image_url: Optional[str] = None) 
         model = await get_ai_model()
         user_content = message
 
-    logger.info(f"AI call: model={model}, has_image={bool(image_url)}, mem_len={len(memory)}, prompt_len={len(prompt)}")
+    logger.info(f"AI call: model={model}, has_image={bool(image_url)}, mem_len={len(memory)}, prompt_len={len(full_prompt)}")
 
     messages: list = [
-        {"role": "system", "content": prompt},
+        {"role": "system", "content": full_prompt},
         {"role": "user", "content": user_content},
     ]
 
@@ -201,30 +241,60 @@ async def process(message: str, context: dict, image_url: Optional[str] = None) 
         )
     except Exception as e:
         error_str = str(e)
-        # Model decommissioned → fallback + update DB
-        if "decommissioned" in error_str or "model_decommissioned" in error_str:
-            logger.warning(f"Model {model} decommissioned, falling back to {FALLBACK_MODEL}")
-            try:
-                # Update Supabase to fallback model
-                await asyncio.to_thread(
-                    lambda: supabase.table("settings").upsert({
-                        "key": "ai_model",
-                        "value": FALLBACK_MODEL,
-                    }).execute()
-                )
-                response = await client.chat.completions.create(
-                    model=FALLBACK_MODEL,
-                    messages=messages,
-                    temperature=0.3,
-                    max_tokens=500,
-                )
-            except Exception as e2:
-                logger.error(f"Groq API error (fallback also failed): {e2}")
-                return {
-                    "action": "chat",
-                    "data": {},
-                    "reply": "AI servisinde sorun var, sonra dene.",
-                }
+        # Model not found or decommissioned → try fallback
+        if "model_not_found" in error_str or "decommissioned" in error_str or "model_decommissioned" in error_str:
+            if image_url:
+                # Vision model failed → try chat model with image
+                logger.warning(f"Vision model {model} unavailable, trying chat model with image")
+                fallback = await get_ai_model()
+                try:
+                    response = await client.chat.completions.create(
+                        model=fallback,
+                        messages=messages,
+                        temperature=0.3,
+                        max_tokens=500,
+                    )
+                except Exception as e2:
+                    # Even chat model can't handle image → describe it textually
+                    logger.warning(f"Chat model {fallback} also can't handle image, falling back to text-only")
+                    messages[1]["content"] = [{"type": "text", "text": f"(Fotoğraf gönderildi ama vision modeli şu an çalışmıyor. Kullanıcı mesajı: {message or 'Sadece fotoğraf'})"}]
+                    try:
+                        response = await client.chat.completions.create(
+                            model=fallback,
+                            messages=messages,
+                            temperature=0.3,
+                            max_tokens=500,
+                        )
+                    except Exception as e3:
+                        logger.error(f"All models failed: {e3}")
+                        return {
+                            "action": "chat",
+                            "data": {},
+                            "reply": "Vision modeli şu an çalışmıyor. Ayarlardan farklı bir model seç.",
+                        }
+            else:
+                # Chat model failed
+                logger.warning(f"Model {model} unavailable, falling back to {FALLBACK_MODEL}")
+                try:
+                    await asyncio.to_thread(
+                        lambda: supabase.table("settings").upsert({
+                            "key": "ai_model",
+                            "value": FALLBACK_MODEL,
+                        }).execute()
+                    )
+                    response = await client.chat.completions.create(
+                        model=FALLBACK_MODEL,
+                        messages=messages,
+                        temperature=0.3,
+                        max_tokens=500,
+                    )
+                except Exception as e2:
+                    logger.error(f"Groq API error (fallback also failed): {e2}")
+                    return {
+                        "action": "chat",
+                        "data": {},
+                        "reply": "AI servisinde sorun var, sonra dene.",
+                    }
         else:
             logger.error(f"Groq API error: {e}")
             return {
@@ -250,7 +320,6 @@ async def process(message: str, context: dict, image_url: Optional[str] = None) 
 
 
 async def watcher_analyze() -> Optional[str]:
-    """Analyze user state and return a proactive message or None."""
     context = get_today_summary()
     context["balance"] = f"{context['balance']} TL"
     memory = await asyncio.to_thread(get_all_memory)
