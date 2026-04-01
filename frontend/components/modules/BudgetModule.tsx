@@ -14,18 +14,18 @@ interface BudgetEntry {
   date: string;
 }
 
-export default function BudgetModule() {
+export default function BudgetModule({ date }: { date?: string }) {
   const [summary, setSummary] = useState<any>(null);
   const [recent, setRecent] = useState<BudgetEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([api.budgetSummary(), api.budget()]).then(([s, r]) => {
+    Promise.all([api.budgetSummary(date), api.budget(date)]).then(([s, r]) => {
       setSummary(s);
       setRecent(r.slice(0, 5));
       setLoading(false);
     });
-  }, []);
+  }, [date]);
 
   if (loading) return <ModuleCard title="Bütçe" emoji="💰" value="..." />;
 

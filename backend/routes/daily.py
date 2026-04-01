@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Optional, List
 from database import supabase
+from datetime import date
 
 router = APIRouter(prefix="/api/daily", tags=["daily"])
 
@@ -20,26 +21,24 @@ class DailyCreate(BaseModel):
 
 
 @router.get("/")
-async def get_daily():
-    from datetime import date
-    today = str(date.today())
-    result = supabase.table("daily_plans").select("*").eq("date", today).execute()
+async def get_daily(d: Optional[str] = Query(None, alias="date")):
+    target_date = d or str(date.today())
+    result = supabase.table("daily_plans").select("*").eq("date", target_date).execute()
     if result.data:
         return result.data[0]
-    return {"date": today, "tasks": [], "notes": None, "mood": None}
+    return {"date": target_date, "tasks": [], "notes": None, "mood": None}
 
 
 @router.post("/")
 async def update_daily(item: DailyCreate):
-    from datetime import date
-    today = item.date or str(date.today())
+    target_date = item.date or str(date.today())
     data = {
         "tasks": item.tasks or [],
         "notes": item.notes,
         "mood": item.mood,
-        "date": today,
+        "date": target_date,
     }
-    existing = supabase.table("daily_plans").select("id").eq("date", today).execute()
+    existing = supabase.table("daily_plans").select("id").eq("date", target_date).execute()
     if existing.data:
         result = supabase.table("daily_plans").update(data).eq("id", existing.data[0]["id"]).execute()
     else:

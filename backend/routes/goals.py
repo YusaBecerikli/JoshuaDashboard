@@ -48,3 +48,9 @@ async def update_goal(goal_id: int, item: GoalUpdate):
         return {"error": "No fields to update"}
     result = supabase.table("goals").update(update_data).eq("id", goal_id).execute()
     return result.data[0] if result.data else {}
+
+
+@router.delete("/{goal_id}")
+async def delete_goal(goal_id: int):
+    result = supabase.table("goals").delete().eq("id", goal_id).execute()
+    return {"deleted": True}

@@ -30,3 +30,9 @@ async def add_social(item: SocialCreate):
         "date": item.date,
     }).execute()
     return result.data[0]
+
+
+@router.delete("/{item_id}")
+async def delete_social(item_id: int):
+    result = supabase.table("social_notes").delete().eq("id", item_id).execute()
+    return {"deleted": True}

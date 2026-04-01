@@ -4,16 +4,16 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import ModuleCard from "@/components/ModuleCard";
 
-export default function SleepModule() {
+export default function SleepModule({ date }: { date?: string }) {
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.sleepSummary().then((s) => {
+    api.sleepSummary(date).then((s) => {
       setSummary(s);
       setLoading(false);
     });
-  }, []);
+  }, [date]);
 
   if (loading) return <ModuleCard title="Uyku" emoji="😴" value="..." />;
 

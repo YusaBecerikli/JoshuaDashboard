@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Optional
 from database import supabase
@@ -15,14 +15,20 @@ class SleepCreate(BaseModel):
 
 
 @router.get("/")
-async def get_sleep():
-    result = supabase.table("sleep_logs").select("*").order("date", desc=True).limit(30).execute()
+async def get_sleep(d: Optional[str] = Query(None, alias="date")):
+    query = supabase.table("sleep_logs").select("*").order("date", desc=True).limit(30)
+    if d:
+        query = query.eq("date", d)
+    result = query.execute()
     return result.data
 
 
 @router.get("/summary")
-async def get_sleep_summary():
-    result = supabase.table("sleep_logs").select("*").order("date", desc=True).limit(14).execute()
+async def get_sleep_summary(d: Optional[str] = Query(None, alias="date")):
+    query = supabase.table("sleep_logs").select("*").order("date", desc=True).limit(14)
+    if d:
+        query = query.eq("date", d)
+    result = query.execute()
     data = result.data
     avg_quality = sum(r["quality"] or 5 for r in data) / len(data) if data else 0
     durations = []
@@ -56,3 +62,9 @@ async def add_sleep(item: SleepCreate):
         "date": item.date,
     }).execute()
     return result.data[0]
+
+
+@router.delete("/{item_id}")
+async def delete_sleep(item_id: int):
+    result = supabase.table("sleep_logs").delete().eq("id", item_id).execute()
+    return {"deleted": True}

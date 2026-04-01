@@ -6,23 +6,23 @@ import ModuleCard from "@/components/ModuleCard";
 
 const moodEmojis = ["", "😫", "😕", "😐", "🙂", "😊", "😄", "😁", "🤩", "🔥", "💯"];
 
-export default function DailyPlanModule() {
+export default function DailyPlanModule({ date }: { date?: string }) {
   const [plan, setPlan] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<any[]>([]);
 
   useEffect(() => {
-    api.daily().then((p) => {
+    api.daily(date).then((p) => {
       setPlan(p);
       setTasks(p.tasks || []);
       setLoading(false);
     });
-  }, []);
+  }, [date]);
 
   const toggleTask = async (index: number) => {
     const updated = tasks.map((t, i) => (i === index ? { ...t, done: !t.done } : t));
     setTasks(updated);
-    await api.updateDaily({ ...plan, tasks: updated });
+    await api.updateDaily({ ...plan, tasks: updated, date });
   };
 
   if (loading) return <ModuleCard title="Günlük Plan" emoji="📋" value="..." />;

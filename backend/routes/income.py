@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Optional, List
 from database import supabase
@@ -48,3 +48,9 @@ async def add_income(item: IncomeCreate):
         "date": item.date,
     }).execute()
     return result.data[0]
+
+
+@router.delete("/{item_id}")
+async def delete_income(item_id: int):
+    result = supabase.table("online_income").delete().eq("id", item_id).execute()
+    return {"deleted": True}

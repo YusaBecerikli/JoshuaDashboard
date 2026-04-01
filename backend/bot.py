@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+from datetime import datetime, timedelta
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from dotenv import load_dotenv
@@ -16,6 +17,24 @@ ALLOWED_USER_ID = int(os.getenv("TELEGRAM_USER_ID", "0"))
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
+TABLE_MAP = {
+    "bütçe": "budget",
+    "budget": "budget",
+    "çalışma": "study_sessions",
+    "study": "study_sessions",
+    "ders": "study_sessions",
+    "uyku": "sleep_logs",
+    "sleep": "sleep_logs",
+    "alışkanlık": "habits",
+    "habit": "habits",
+    "gelir": "online_income",
+    "income": "online_income",
+    "sosyal": "social_notes",
+    "social": "social_notes",
+    "net": "exam_scores",
+    "score": "exam_scores",
+}
+
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -26,7 +45,9 @@ async def cmd_start(message: types.Message):
                          "• 'Dün gece 01:30'da yattım'\n"
                          "• '50 lira yemek yedim'\n"
                          "• 'Kitap okuma alışkanlığı ekle'\n"
-                         "• 'Bakiyem ne kadar?'")
+                         "• 'TYT matematik 28.5 net'\n"
+                         "• 'Yarın 09:00'da matematik çalışmayı hatırlat'\n"
+                         "• 'Son kaydı sil'")
 
 
 @dp.message(Command("durum"))
@@ -37,12 +58,13 @@ async def cmd_status(message: types.Message):
     balance = ctx["balance"]
     study_h = ctx["study_minutes"] / 60
     habits = f"{ctx['habits_completed']}/{ctx['habits_total']}"
+    sleep_info = f"{ctx['sleep'].get('sleep_time', '?')} - {ctx['sleep'].get('wake_time', '?')}" if ctx.get("sleep") else "Kayıt yok"
     await message.answer(
         f"📊 Bugünkü durum:\n\n"
         f"💰 Bakiye: {balance} TL\n"
         f"📚 Çalışma: {study_h:.1f} saat\n"
         f"✅ Alışkanlıklar: {habits}\n"
-        f"😴 Son uyku: {ctx['sleep'].get('sleep_time', '?')} - {ctx['sleep'].get('wake_time', '?')}" if ctx["sleep"] else "😴 Uyku kaydı yok"
+        f"😴 Son uyku: {sleep_info}"
     )
 
 
@@ -55,11 +77,12 @@ async def cmd_help(message: types.Message):
         "/start - Botu başlat\n"
         "/durum - Bugünkü özet\n"
         "/yardim - Bu mesaj\n\n"
-        "Normal konuşma gibi yaz, ben anlarım:\n"
+        "Normal konuşma gibi yaz:\n"
         "• '2 saat fizik çalıştım'\n"
-        "• 'Clickworker'dan 500 tl kazandım'\n"
-        "• 'Sabah 8'de kalktım'\n"
-        "• 'Yarın dişçi randevum var, plana ekle'"
+        "• 'Clickworker 500 tl'\n"
+        "• 'TYT Türkçe 30 net'\n"
+        "• 'Yarın 09:00'da hatırlat'\n"
+        "• 'Son bütçe kaydını sil'"
     )
 
 
@@ -173,10 +196,52 @@ async def execute_action(action: str, data: dict):
             "module_key": data.get("module_key"),
             "title": data.get("title"),
             "description": data.get("description"),
+            "schema": data.get("schema"),
         }).execute()
+    elif action == "exam_score_add":
+        supabase.table("exam_scores").insert({
+            "exam_type": data.get("exam_type"),
+            "subject": data.get("subject"),
+            "net_score": data.get("net_score"),
+        }).execute()
+    elif action == "reminder_add":
+        supabase.table("reminders").insert({
+            "message": data.get("message"),
+            "remind_at": data.get("remind_at"),
+        }).execute()
+    elif action == "delete_last":
+        table = data.get("table", "")
+        if table in TABLE_MAP.values():
+            result = supabase.table(table).select("id").order("id", desc=True).limit(1).execute()
+            if result.data:
+                supabase.table(table).delete().eq("id", result.data[0]["id"]).execute()
+        else:
+            for keyword, tbl in TABLE_MAP.items():
+                if keyword in table:
+                    result = supabase.table(tbl).select("id").order("id", desc=True).limit(1).execute()
+                    if result.data:
+                        supabase.table(tbl).delete().eq("id", result.data[0]["id"]).execute()
+                    break
+
+
+async def check_reminders():
+    while True:
+        try:
+            now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+            result = supabase.table("reminders").select("*").lte("remind_at", now).eq("sent", False).execute()
+            for reminder in result.data:
+                try:
+                    await bot.send_message(ALLOWED_USER_ID, f"⏰ Hatırlatma: {reminder['message']}")
+                    supabase.table("reminders").update({"sent": True}).eq("id", reminder["id"]).execute()
+                except Exception as e:
+                    print(f"Reminder send error: {e}")
+        except Exception as e:
+            print(f"Reminder check error: {e}")
+        await asyncio.sleep(60)
 
 
 async def main():
+    asyncio.create_task(check_reminders())
     await dp.start_polling(bot, handle_signals=False)
 
 

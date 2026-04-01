@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Optional
 from database import supabase
+from datetime import date
 
 router = APIRouter(prefix="/api/budget", tags=["budget"])
 
@@ -15,14 +16,20 @@ class BudgetCreate(BaseModel):
 
 
 @router.get("/")
-async def get_budget():
-    result = supabase.table("budget").select("*").order("date", desc=True).limit(100).execute()
+async def get_budget(d: Optional[str] = Query(None, alias="date")):
+    query = supabase.table("budget").select("*").order("date", desc=True).limit(100)
+    if d:
+        query = query.eq("date", d)
+    result = query.execute()
     return result.data
 
 
 @router.get("/summary")
-async def get_budget_summary():
-    result = supabase.table("budget").select("*").execute()
+async def get_budget_summary(d: Optional[str] = Query(None, alias="date")):
+    query = supabase.table("budget").select("*")
+    if d:
+        query = query.eq("date", d)
+    result = query.execute()
     incomes = [r for r in result.data if r["type"] == "income"]
     expenses = [r for r in result.data if r["type"] == "expense"]
     total_income = sum(float(r["amount"] or 0) for r in incomes)
@@ -50,3 +57,9 @@ async def add_budget(item: BudgetCreate):
         "date": item.date,
     }).execute()
     return result.data[0]
+
+
+@router.delete("/{item_id}")
+async def delete_budget(item_id: int):
+    result = supabase.table("budget").delete().eq("id", item_id).execute()
+    return {"deleted": True}

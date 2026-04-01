@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Optional
 from database import supabase
+from datetime import date
 
 router = APIRouter(prefix="/api/habits", tags=["habits"])
 
@@ -18,11 +19,10 @@ class HabitLog(BaseModel):
 
 
 @router.get("/")
-async def get_habits():
+async def get_habits(d: Optional[str] = Query(None, alias="date")):
     habits = supabase.table("habits").select("*").order("id").execute()
-    from datetime import date
-    today = str(date.today())
-    logs = supabase.table("habit_logs").select("*").eq("date", today).execute()
+    target_date = d or str(date.today())
+    logs = supabase.table("habit_logs").select("*").eq("date", target_date).execute()
     log_map = {l["habit_id"]: l["completed"] for l in logs.data}
     result = []
     for h in habits.data:
@@ -45,15 +45,21 @@ async def add_habit(item: HabitCreate):
 
 @router.post("/{habit_id}/log")
 async def log_habit(habit_id: int, item: HabitLog):
-    from datetime import date
-    today = item.date or str(date.today())
-    existing = supabase.table("habit_logs").select("*").eq("habit_id", habit_id).eq("date", today).execute()
+    target_date = item.date or str(date.today())
+    existing = supabase.table("habit_logs").select("*").eq("habit_id", habit_id).eq("date", target_date).execute()
     if existing.data:
         result = supabase.table("habit_logs").update({"completed": item.completed}).eq("id", existing.data[0]["id"]).execute()
     else:
         result = supabase.table("habit_logs").insert({
             "habit_id": habit_id,
             "completed": item.completed,
-            "date": today,
+            "date": target_date,
         }).execute()
     return result.data[0] if result.data else {}
+
+
+@router.delete("/{habit_id}")
+async def delete_habit(habit_id: int):
+    supabase.table("habit_logs").delete().eq("habit_id", habit_id).execute()
+    result = supabase.table("habits").delete().eq("id", habit_id).execute()
+    return {"deleted": True}

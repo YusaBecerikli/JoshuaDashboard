@@ -4,16 +4,16 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import ModuleCard from "@/components/ModuleCard";
 
-export default function StudyModule() {
+export default function StudyModule({ date }: { date?: string }) {
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.studySummary().then((s) => {
+    api.studySummary(date).then((s) => {
       setSummary(s);
       setLoading(false);
     });
-  }, []);
+  }, [date]);
 
   if (loading) return <ModuleCard title="Çalışma" emoji="📚" value="..." />;
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Optional
 from database import supabase
@@ -16,14 +16,20 @@ class StudyCreate(BaseModel):
 
 
 @router.get("/")
-async def get_study():
-    result = supabase.table("study_sessions").select("*").order("date", desc=True).limit(100).execute()
+async def get_study(d: Optional[str] = Query(None, alias="date")):
+    query = supabase.table("study_sessions").select("*").order("date", desc=True).limit(100)
+    if d:
+        query = query.eq("date", d)
+    result = query.execute()
     return result.data
 
 
 @router.get("/summary")
-async def get_study_summary():
-    result = supabase.table("study_sessions").select("*").execute()
+async def get_study_summary(d: Optional[str] = Query(None, alias="date")):
+    query = supabase.table("study_sessions").select("*")
+    if d:
+        query = query.eq("date", d)
+    result = query.execute()
     total_minutes = sum(r["duration_minutes"] or 0 for r in result.data)
     total_nets = [r["net_count"] for r in result.data if r.get("net_count")]
     by_subject = {}
@@ -50,3 +56,9 @@ async def add_study(item: StudyCreate):
         "date": item.date,
     }).execute()
     return result.data[0]
+
+
+@router.delete("/{item_id}")
+async def delete_study(item_id: int):
+    result = supabase.table("study_sessions").delete().eq("id", item_id).execute()
+    return {"deleted": True}

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import budget, study, sleep, habits, goals, income, social, daily, modules, dashboard
+from routes import budget, study, sleep, habits, goals, income, social, daily, modules, dashboard, scores, reminders, settings, charts
 import asyncio
 import threading
 
@@ -24,6 +24,10 @@ app.include_router(social.router)
 app.include_router(daily.router)
 app.include_router(modules.router)
 app.include_router(dashboard.router)
+app.include_router(scores.router)
+app.include_router(reminders.router)
+app.include_router(settings.router)
+app.include_router(charts.router)
 
 
 @app.get("/")

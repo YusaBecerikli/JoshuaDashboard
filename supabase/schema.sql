@@ -108,3 +108,32 @@ CREATE TABLE IF NOT EXISTS custom_module_data (
   date DATE DEFAULT CURRENT_DATE,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+  key VARCHAR(100) PRIMARY KEY,
+  value TEXT,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+INSERT INTO settings (key, value) VALUES
+('system_prompt', 'Sen Joshua''nın kişisel asistanısın. Arkadaş gibi konuş. Türkçe. Kısa ve direkt.'),
+('dashboard_version', '2')
+ON CONFLICT (key) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS exam_scores (
+  id SERIAL PRIMARY KEY,
+  exam_type VARCHAR(10),
+  subject VARCHAR(50),
+  net_score DECIMAL(5,2),
+  date DATE DEFAULT CURRENT_DATE,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS reminders (
+  id SERIAL PRIMARY KEY,
+  message TEXT,
+  remind_at TIMESTAMP,
+  sent BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW()
+);

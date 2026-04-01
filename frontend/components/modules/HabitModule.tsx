@@ -4,19 +4,19 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import ModuleCard from "@/components/ModuleCard";
 
-export default function HabitModule() {
+export default function HabitModule({ date }: { date?: string }) {
   const [habits, setHabits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.habits().then((h) => {
+    api.habits(date).then((h) => {
       setHabits(h);
       setLoading(false);
     });
-  }, []);
+  }, [date]);
 
   const toggleHabit = async (id: number, current: boolean) => {
-    await api.logHabit(id, { completed: !current });
+    await api.logHabit(id, { completed: !current, date });
     setHabits((prev) =>
       prev.map((h) => (h.id === id ? { ...h, completed_today: !current } : h))
     );
@@ -31,7 +31,7 @@ export default function HabitModule() {
       title="Alışkanlıklar"
       emoji="✅"
       value={`${completed}/${habits.length}`}
-      subtitle="Bugün"
+      subtitle={date || "Bugün"}
       size="sm"
       accentColor="neon-green"
     >
