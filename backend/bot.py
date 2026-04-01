@@ -3,6 +3,8 @@ import json
 import asyncio
 import logging
 import base64
+import signal
+import sys
 from datetime import datetime, timedelta
 from typing import Optional
 from aiogram import Bot, Dispatcher, types
@@ -373,6 +375,12 @@ async def main():
     asyncio.create_task(watcher_task())
     await asyncio.to_thread(init_memory)
     logger.info("Bot started with reminder checker + watcher + memory (Supabase)")
+
+    # Graceful shutdown: close bot on SIGTERM/SIGINT to prevent Telegram conflicts
+    loop = asyncio.get_event_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, lambda: asyncio.ensure_future(bot.session.close()))
+
     await dp.start_polling(bot, handle_signals=False)
 
 

@@ -118,8 +118,9 @@ CREATE TABLE IF NOT EXISTS settings (
 INSERT INTO settings (key, value) VALUES
 ('system_prompt', 'Sen Joshua''nın kişisel asistanısın. Arkadaş gibi konuş. Türkçe. Kısa ve direkt.'),
 ('dashboard_version', '2'),
-('ai_model', 'llama-3.3-70b-versatile')
-ON CONFLICT (key) DO NOTHING;
+('ai_model', 'llama-3.3-70b-versatile'),
+('vision_model', 'llama-4-maverick-17b-128e-instruct')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 CREATE TABLE IF NOT EXISTS exam_scores (
   id SERIAL PRIMARY KEY,

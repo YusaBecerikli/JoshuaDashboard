@@ -13,7 +13,12 @@ logger = logging.getLogger("ai")
 
 client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
-VISION_MODEL = "llama-3.2-11b-vision-preview"
+VISION_MODEL = "llama-4-maverick-17b-128e-instruct"
+FALLBACK_MODEL = "llama-3.3-70b-versatile"
+
+
+async def get_vision_model() -> str:
+    return await asyncio.to_thread(_sync_get_setting, "vision_model", VISION_MODEL)
 
 DEFAULT_SYSTEM_PROMPT = """Sen Joshua'nın (Muhammed Yuşa Becerikli) kişisel asistanısın. 17 yaşında, Bingöl'de yaşıyor, Haziran'da YKS var, hedefi Sabancı Üniversitesi Bilgisayar Mühendisliği.
 
@@ -96,35 +101,46 @@ async def get_ai_model() -> str:
 
 
 def _parse_json(text: str) -> dict:
-    """Robust JSON extraction from messy LLM output."""
+    """Robust JSON extraction from messy LLM output. Prioritizes JSON with 'action' key."""
     text = text.strip()
 
-    if text.startswith("{"):
+    # Try markdown code blocks first (most reliable)
+    for match in re.finditer(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL):
         try:
-            return json.loads(text)
+            obj = json.loads(match.group(1).strip())
+            if "action" in obj or "message" in obj or "send" in obj:
+                return obj
         except json.JSONDecodeError:
             pass
 
-    match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1).strip())
-        except json.JSONDecodeError:
-            pass
+    # Try each top-level JSON object in text
+    depth = 0
+    start = -1
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start != -1:
+                candidate = text[start:i + 1]
+                try:
+                    obj = json.loads(candidate)
+                    if "action" in obj or "message" in obj or "send" in obj:
+                        return obj
+                except json.JSONDecodeError:
+                    pass
+                start = -1
 
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        try:
-            return json.loads(text[start:end + 1])
-        except json.JSONDecodeError:
-            pass
-
+    # Last resort: try each line
     for line in text.split("\n"):
         line = line.strip()
         if line.startswith("{"):
             try:
-                return json.loads(line)
+                obj = json.loads(line)
+                if "action" in obj or "message" in obj or "send" in obj:
+                    return obj
             except json.JSONDecodeError:
                 pass
 
@@ -160,7 +176,7 @@ async def process(message: str, context: dict, image_url: Optional[str] = None) 
     prompt = system_prompt.replace("{MEMORY}", memory).replace("{CONTEXT}", context_str)
 
     if image_url:
-        model = VISION_MODEL
+        model = await get_vision_model()
         user_content: List[dict] = [
             {"type": "text", "text": message or "Bu fotoğrafa bak ve analiz et."},
         ]
@@ -184,12 +200,38 @@ async def process(message: str, context: dict, image_url: Optional[str] = None) 
             max_tokens=500,
         )
     except Exception as e:
-        logger.error(f"Groq API error: {e}")
-        return {
-            "action": "chat",
-            "data": {},
-            "reply": "AI servisinde sorun var, sonra dene.",
-        }
+        error_str = str(e)
+        # Model decommissioned → fallback + update DB
+        if "decommissioned" in error_str or "model_decommissioned" in error_str:
+            logger.warning(f"Model {model} decommissioned, falling back to {FALLBACK_MODEL}")
+            try:
+                # Update Supabase to fallback model
+                await asyncio.to_thread(
+                    lambda: supabase.table("settings").upsert({
+                        "key": "ai_model",
+                        "value": FALLBACK_MODEL,
+                    }).execute()
+                )
+                response = await client.chat.completions.create(
+                    model=FALLBACK_MODEL,
+                    messages=messages,
+                    temperature=0.3,
+                    max_tokens=500,
+                )
+            except Exception as e2:
+                logger.error(f"Groq API error (fallback also failed): {e2}")
+                return {
+                    "action": "chat",
+                    "data": {},
+                    "reply": "AI servisinde sorun var, sonra dene.",
+                }
+        else:
+            logger.error(f"Groq API error: {e}")
+            return {
+                "action": "chat",
+                "data": {},
+                "reply": "AI servisinde sorun var, sonra dene.",
+            }
 
     text = response.choices[0].message.content.strip()
     logger.info(f"AI raw response: {text[:200]}")

@@ -5,22 +5,23 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { api } from "@/lib/api";
 
+interface ModelOption {
+  id: string;
+  name: string;
+}
+
 export default function SettingsPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState("");
-  const [aiModel, setAiModel] = useState("llama-3.3-70b-versatile");
+  const [aiModel, setAiModel] = useState("");
+  const [visionModel, setVisionModel] = useState("");
+  const [chatModels, setChatModels] = useState<ModelOption[]>([]);
+  const [visionModels, setVisionModels] = useState<ModelOption[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-
-  const models = [
-    { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (Varsayılan)" },
-    { value: "llama-3.1-8b-instant", label: "Llama 3.1 8B (Hızlı)" },
-    { value: "mixtral-8x7b-32768", label: "Mixtral 8x7B" },
-    { value: "gemma2-9b-it", label: "Gemma 2 9B" },
-    { value: "deepseek-r1-distill-llama-70b", label: "DeepSeek R1 Distill 70B" },
-  ];
 
   useEffect(() => {
     if (localStorage.getItem("settings_unlocked") === "true") {
@@ -30,10 +31,17 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (authenticated) {
-      api.settings().then((s) => {
+      Promise.all([
+        api.settings(),
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/settings/models/list`).then((r) => r.json()),
+      ]).then(([s, m]) => {
         setSystemPrompt(s.system_prompt || "");
-        setAiModel(s.ai_model || "llama-3.3-70b-versatile");
-      });
+        setAiModel(s.ai_model || "");
+        setVisionModel(s.vision_model || "");
+        setChatModels(m.chat || []);
+        setVisionModels(m.vision || []);
+        setModelsLoading(false);
+      }).catch(() => setModelsLoading(false));
     }
   }, [authenticated]);
 
@@ -52,6 +60,7 @@ export default function SettingsPage() {
     setSaving(true);
     await api.updateSetting({ key: "system_prompt", value: systemPrompt });
     await api.updateSetting({ key: "ai_model", value: aiModel });
+    await api.updateSetting({ key: "vision_model", value: visionModel });
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -113,22 +122,60 @@ export default function SettingsPage() {
         </motion.header>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-2">AI Modeli</h2>
+          <h2 className="text-lg font-semibold mb-2">Sohbet Modeli</h2>
           <p className="text-xs text-gray-500 mb-4">
-            Botun kullandığı yapay zeka modeli. Değişiklikler anında uygulanır.
+            Normal mesajlar için kullanılan model. Groq'dan canlı çekilir.
           </p>
-          <select
-            value={aiModel}
-            onChange={(e) => setAiModel(e.target.value)}
-            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-accent"
-          >
-            {models.map((m) => (
-              <option key={m.value} value={m.value}>{m.label}</option>
-            ))}
-          </select>
+          {modelsLoading ? (
+            <div className="text-sm text-gray-500">Modeller yükleniyor...</div>
+          ) : chatModels.length > 0 ? (
+            <select
+              value={aiModel}
+              onChange={(e) => setAiModel(e.target.value)}
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-accent"
+            >
+              {chatModels.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={aiModel}
+              onChange={(e) => setAiModel(e.target.value)}
+              placeholder="Model ID (örn: llama-3.3-70b-versatile)"
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-accent"
+            />
+          )}
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass p-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-2">Vision Modeli</h2>
+          <p className="text-xs text-gray-500 mb-4">
+            Fotoğraf gönderildiğinde kullanılan model.
+          </p>
+          {modelsLoading ? (
+            <div className="text-sm text-gray-500">Modeller yükleniyor...</div>
+          ) : visionModels.length > 0 ? (
+            <select
+              value={visionModel}
+              onChange={(e) => setVisionModel(e.target.value)}
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-accent"
+            >
+              {visionModels.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={visionModel}
+              onChange={(e) => setVisionModel(e.target.value)}
+              placeholder="Model ID (örn: llama-4-maverick-17b-128e-instruct)"
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-accent"
+            />
+          )}
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass p-6">
           <h2 className="text-lg font-semibold mb-2">Sistem Promptu</h2>
           <p className="text-xs text-gray-500 mb-4">
             Telegram botunun AI davranışını belirler. Değişiklikler anında uygulanır.
