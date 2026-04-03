@@ -25,7 +25,7 @@ class GoalUpdate(BaseModel):
 @router.get("/")
 async def get_goals():
     result = supabase.table("goals").select("*").order("id", desc=True).execute()
-    return result.data
+    return {"data": result.data or []}
 
 
 @router.post("/")
@@ -38,7 +38,7 @@ async def add_goal(item: GoalCreate):
         "progress": item.progress,
         "status": item.status,
     }).execute()
-    return result.data[0]
+    return result.data[0] if result.data else {}
 
 
 @router.patch("/{goal_id}")

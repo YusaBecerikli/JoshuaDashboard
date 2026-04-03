@@ -9,26 +9,39 @@ import {
 import { api } from "@/lib/api";
 
 export default function ChartsPage() {
+  const [authenticated, setAuthenticated] = useState(false);
   const [sleepData, setSleepData] = useState<any[]>([]);
   const [studyData, setStudyData] = useState<any[]>([]);
   const [tytScores, setTytScores] = useState<any[]>([]);
   const [aytScores, setAytScores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      api.chartSleep(),
-      api.chartStudy(),
-      api.tytScores(),
-      api.aytScores(),
-    ]).then(([sleep, study, tyt, ayt]) => {
-      setSleepData(sleep || []);
-      setStudyData(study || []);
-      setTytScores(tyt || []);
-      setAytScores(ayt || []);
-      setLoading(false);
-    });
+    if (localStorage.getItem("dashboard_unlocked") === "true") {
+      setAuthenticated(true);
+    }
   }, []);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    Promise.all([
+      api.chartSleep().catch(() => []),
+      api.chartStudy().catch(() => []),
+      api.tytScores().catch(() => []),
+      api.aytScores().catch(() => []),
+    ]).then(([sleep, study, tyt, ayt]) => {
+      setSleepData(Array.isArray(sleep) ? sleep : []);
+      setStudyData(Array.isArray(study) ? study : []);
+      setTytScores(Array.isArray(tyt) ? tyt : []);
+      setAytScores(Array.isArray(ayt) ? ayt : []);
+      setLoading(false);
+    }).catch((err) => {
+      setError("Grafik verileri yüklenemedi.");
+      setLoading(false);
+      console.error(err);
+    });
+  }, [authenticated]);
 
   const formatChartDate = (d: string) => {
     if (!d) return "";
@@ -58,6 +71,17 @@ export default function ChartsPage() {
     ? (sleepData.filter((d: any) => d.duration_hours).reduce((s: number, d: any) => s + d.duration_hours, 0) / sleepData.filter((d: any) => d.duration_hours).length).toFixed(1)
     : "0";
 
+  if (!authenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-500">
+        <div className="text-center">
+          <p className="mb-4">Grafikleri görmek için önce giriş yapın.</p>
+          <Link href="/" className="text-accent hover:underline">← Dashboard&apos;a dön</Link>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Yükleniyor...</div>;
 
   return (
@@ -77,11 +101,20 @@ export default function ChartsPage() {
             <Link href="/charts" className="px-4 py-2 rounded-lg bg-accent/20 text-accent text-sm font-medium border border-accent/30">
               Grafikler
             </Link>
+            <Link href="/notes" className="px-4 py-2 rounded-lg glass text-gray-400 text-sm hover:text-white transition-colors">
+              Notlar
+            </Link>
             <Link href="/settings" className="px-4 py-2 rounded-lg glass text-gray-400 text-sm hover:text-white transition-colors">
               Ayarlar
             </Link>
           </div>
         </motion.header>
+
+        {error && (
+          <div className="mb-6 p-3 bg-red-900/30 border border-red-500/30 rounded-lg text-sm text-red-400">
+            {error}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Uyku Grafiği */}
@@ -132,7 +165,7 @@ export default function ChartsPage() {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-center text-gray-600 py-12 text-sm">Henüz TYT net kaydı yok. Telegram'dan ekle!</p>
+              <p className="text-center text-gray-600 py-12 text-sm">Henüz TYT net kaydı yok. Telegram&apos;dan ekle!</p>
             )}
           </motion.div>
 
@@ -154,7 +187,7 @@ export default function ChartsPage() {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-center text-gray-600 py-12 text-sm">Henüz AYT net kaydı yok. Telegram'dan ekle!</p>
+              <p className="text-center text-gray-600 py-12 text-sm">Henüz AYT net kaydı yok. Telegram&apos;dan ekle!</p>
             )}
           </motion.div>
         </div>

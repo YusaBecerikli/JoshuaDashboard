@@ -12,7 +12,7 @@ export default function SleepModule({ date }: { date?: string }) {
     api.sleepSummary(date).then((s) => {
       setSummary(s);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, [date]);
 
   if (loading) return <ModuleCard title="Uyku" emoji="😴" value="..." />;
@@ -21,8 +21,8 @@ export default function SleepModule({ date }: { date?: string }) {
     <ModuleCard
       title="Uyku"
       emoji="😴"
-      value={`${summary?.avg_sleep_hours} saat`}
-      subtitle={`Kalite: ${summary?.avg_quality}/10`}
+      value={`${summary?.avg_sleep_hours || 0} saat`}
+      subtitle={`Kalite: ${summary?.avg_quality || 0}/10`}
       size="sm"
       accentColor="neon-purple"
     >

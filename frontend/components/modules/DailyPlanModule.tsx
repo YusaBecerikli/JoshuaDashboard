@@ -16,13 +16,18 @@ export default function DailyPlanModule({ date }: { date?: string }) {
       setPlan(p);
       setTasks(p.tasks || []);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, [date]);
 
   const toggleTask = async (index: number) => {
     const updated = tasks.map((t, i) => (i === index ? { ...t, done: !t.done } : t));
     setTasks(updated);
-    await api.updateDaily({ ...plan, tasks: updated, date });
+    try {
+      await api.updateDaily({ tasks: updated, date });
+    } catch (err) {
+      console.error(err);
+      setTasks(tasks);
+    }
   };
 
   if (loading) return <ModuleCard title="Günlük Plan" emoji="📋" value="..." />;
@@ -34,7 +39,7 @@ export default function DailyPlanModule({ date }: { date?: string }) {
       title="Günlük Plan"
       emoji="📋"
       value={`${done}/${tasks.length}`}
-      subtitle={plan?.mood ? `${moodEmojis[plan.mood]} Ruh hali: ${plan.mood}/10` : ""}
+      subtitle={plan?.mood ? `${moodEmojis[Math.min(plan.mood, moodEmojis.length - 1)] || ""} Ruh hali: ${plan.mood}/10` : ""}
       size="lg"
       accentColor="neon"
     >

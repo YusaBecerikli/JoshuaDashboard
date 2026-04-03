@@ -1,3 +1,4 @@
+import os
 import logging
 import httpx
 from fastapi import FastAPI
@@ -12,11 +13,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger("main")
 
+REQUIRED_ENVS = ["SUPABASE_URL", "SUPABASE_KEY", "GROQ_API_KEY", "TELEGRAM_TOKEN", "TELEGRAM_USER_ID", "API_SECRET_KEY"]
+missing = [e for e in REQUIRED_ENVS if not os.getenv(e)]
+if missing:
+    logger.error(f"Missing required environment variables: {', '.join(missing)}")
+    raise RuntimeError(f"Missing env vars: {', '.join(missing)}")
+
 app = FastAPI(title="Joshua Dashboard API")
+
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -51,11 +60,11 @@ async def health():
 
 
 async def keep_alive():
-    """Ping localhost every 5 minutes to prevent Render from sleeping."""
+    port = int(os.getenv("PORT", "8000"))
     while True:
         try:
             async with httpx.AsyncClient() as client:
-                await client.get("http://localhost:10000/health", timeout=5)
+                await client.get(f"http://localhost:{port}/health", timeout=5)
             logger.debug("Keep-alive ping sent")
         except Exception as e:
             logger.debug(f"Keep-alive ping failed: {e}")
@@ -64,7 +73,6 @@ async def keep_alive():
 
 def start_bot():
     try:
-        import asyncio
         from bot import main
         asyncio.run(main())
     except Exception as e:
@@ -76,7 +84,5 @@ async def startup():
     logger.info("Starting bot in background thread...")
     bot_thread = threading.Thread(target=start_bot, daemon=True)
     bot_thread.start()
-
-    # Keep Render awake
     asyncio.create_task(keep_alive())
     logger.info("Keep-alive task started (prevents Render sleep)")

@@ -14,7 +14,7 @@ class NoteCreate(BaseModel):
 @router.get("/")
 async def get_notes():
     result = supabase.table("notes").select("*").order("id", desc=True).execute()
-    return result.data
+    return {"data": result.data or []}
 
 
 @router.post("/")
@@ -23,7 +23,7 @@ async def add_note(item: NoteCreate):
         "content": item.content,
         "tags": item.tags or [],
     }).execute()
-    return result.data[0]
+    return result.data[0] if result.data else {}
 
 
 @router.delete("/{note_id}")

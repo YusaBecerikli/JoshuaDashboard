@@ -23,9 +23,9 @@ async def get_habits(d: Optional[str] = Query(None, alias="date")):
     habits = supabase.table("habits").select("*").order("id").execute()
     target_date = d or str(date.today())
     logs = supabase.table("habit_logs").select("*").eq("date", target_date).execute()
-    log_map = {l["habit_id"]: l["completed"] for l in logs.data}
+    log_map = {l["habit_id"]: l["completed"] for l in (logs.data or [])}
     result = []
-    for h in habits.data:
+    for h in (habits.data or []):
         result.append({
             **h,
             "completed_today": log_map.get(h["id"], False),
@@ -40,7 +40,7 @@ async def add_habit(item: HabitCreate):
         "emoji": item.emoji,
         "frequency": item.frequency,
     }).execute()
-    return result.data[0]
+    return result.data[0] if result.data else {}
 
 
 @router.post("/{habit_id}/log")

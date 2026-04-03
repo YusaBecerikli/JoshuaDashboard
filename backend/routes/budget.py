@@ -21,7 +21,7 @@ async def get_budget(d: Optional[str] = Query(None, alias="date")):
     if d:
         query = query.eq("date", d)
     result = query.execute()
-    return result.data
+    return {"data": result.data or []}
 
 
 @router.get("/summary")
@@ -30,20 +30,21 @@ async def get_budget_summary(d: Optional[str] = Query(None, alias="date")):
     if d:
         query = query.eq("date", d)
     result = query.execute()
-    incomes = [r for r in result.data if r["type"] == "income"]
-    expenses = [r for r in result.data if r["type"] == "expense"]
-    total_income = sum(float(r["amount"] or 0) for r in incomes)
-    total_expense = sum(float(r["amount"] or 0) for r in expenses)
+    data = result.data or []
+    incomes = [r for r in data if r.get("type") == "income"]
+    expenses = [r for r in data if r.get("type") == "expense"]
+    total_income = sum(float(r.get("amount") or 0) for r in incomes)
+    total_expense = sum(float(r.get("amount") or 0) for r in expenses)
     by_category = {}
     for r in expenses:
-        cat = r.get("category", "Diğer")
-        by_category[cat] = by_category.get(cat, 0) + float(r["amount"] or 0)
+        cat = r.get("category") or "Diğer"
+        by_category[cat] = by_category.get(cat, 0) + float(r.get("amount") or 0)
     return {
         "balance": round(total_income - total_expense, 2),
         "total_income": round(total_income, 2),
         "total_expense": round(total_expense, 2),
         "by_category": by_category,
-        "recent": result.data[:10],
+        "recent": data[:10],
     }
 
 
@@ -54,9 +55,9 @@ async def add_budget(item: BudgetCreate):
         "category": item.category,
         "amount": item.amount,
         "description": item.description,
-        "date": item.date,
+        "date": item.date or str(date.today()),
     }).execute()
-    return result.data[0]
+    return result.data[0] if result.data else {}
 
 
 @router.delete("/{item_id}")

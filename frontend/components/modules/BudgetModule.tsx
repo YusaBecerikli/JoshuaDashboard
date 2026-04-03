@@ -20,9 +20,12 @@ export default function BudgetModule({ date }: { date?: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([api.budgetSummary(date), api.budget(date)]).then(([s, r]) => {
+    Promise.all([
+      api.budgetSummary(date).catch(() => null),
+      api.budget(date).catch(() => []),
+    ]).then(([s, r]) => {
       setSummary(s);
-      setRecent(r.slice(0, 5));
+      setRecent(Array.isArray(r) ? r.slice(0, 5) : []);
       setLoading(false);
     });
   }, [date]);
@@ -33,8 +36,8 @@ export default function BudgetModule({ date }: { date?: string }) {
     <ModuleCard
       title="Bütçe"
       emoji="💰"
-      value={`${summary?.balance.toLocaleString("tr-TR")} TL`}
-      subtitle={`Gelir: ${summary?.total_income.toLocaleString("tr-TR")} | Gider: ${summary?.total_expense.toLocaleString("tr-TR")} TL`}
+      value={`${summary?.balance?.toLocaleString("tr-TR") || 0} TL`}
+      subtitle={`Gelir: ${summary?.total_income?.toLocaleString("tr-TR") || 0} | Gider: ${summary?.total_expense?.toLocaleString("tr-TR") || 0} TL`}
       size="md"
       accentColor="neon-green"
     >

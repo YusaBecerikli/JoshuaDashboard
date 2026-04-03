@@ -7,7 +7,7 @@ router = APIRouter(prefix="/api/charts", tags=["charts"])
 @router.get("/sleep")
 async def get_sleep_chart():
     result = supabase.table("sleep_logs").select("*").order("date", desc=True).limit(30).execute()
-    data = result.data
+    data = result.data or []
     for r in data:
         if r.get("sleep_time") and r.get("wake_time"):
             try:
@@ -18,7 +18,7 @@ async def get_sleep_chart():
                 if wake_min < sleep_min:
                     wake_min += 24 * 60
                 r["duration_hours"] = round((wake_min - sleep_min) / 60, 2)
-            except:
+            except (ValueError, TypeError):
                 r["duration_hours"] = None
         else:
             r["duration_hours"] = None
@@ -29,7 +29,7 @@ async def get_sleep_chart():
 async def get_study_chart():
     result = supabase.table("study_sessions").select("*").order("date", desc=True).limit(100).execute()
     daily = {}
-    for r in result.data:
+    for r in (result.data or []):
         d = r.get("date", "")
         if d not in daily:
             daily[d] = {"date": d, "total_minutes": 0, "subjects": {}}

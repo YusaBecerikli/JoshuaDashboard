@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from database import supabase
 
@@ -149,7 +149,7 @@ def update_knowledge(section: str, content: str):
 def append_history(entry: str):
     """Append a timestamped entry to history. Trim if too long."""
     current = read_history()
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
     new_entry = f"\n### [{timestamp}]\n{entry}"
 
     lines = (current + new_entry).split("\n")
@@ -162,7 +162,7 @@ def append_history(entry: str):
 
 def summarize_history(conversation_summary: str):
     """Replace history with a condensed summary."""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
     content = f"# Konuşma Özeti\n\n## Son Önemli Etkileşimler\n\n### [{timestamp}]\n{conversation_summary}\n\n## Gelişmeler\n\n\n## Açık Konular\n\n"
     _write_memory("history_summary", content)
     logger.info("History summarized")

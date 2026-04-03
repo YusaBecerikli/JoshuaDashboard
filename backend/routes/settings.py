@@ -17,24 +17,7 @@ class SettingsUpdate(BaseModel):
 @router.get("/")
 async def get_settings():
     result = supabase.table("settings").select("*").execute()
-    return {r["key"]: r["value"] for r in result.data}
-
-
-@router.get("/{key}")
-async def get_setting(key: str):
-    result = supabase.table("settings").select("*").eq("key", key).execute()
-    if result.data:
-        return result.data[0]
-    return {"error": "Not found"}
-
-
-@router.post("/")
-async def update_setting(item: SettingsUpdate):
-    result = supabase.table("settings").upsert({
-        "key": item.key,
-        "value": item.value,
-    }).execute()
-    return result.data[0] if result.data else {}
+    return {r["key"]: r["value"] for r in (result.data or [])}
 
 
 @router.get("/models/list")
@@ -63,10 +46,8 @@ async def get_available_models():
                     if any(kw in mid.lower() for kw in skip_keywords):
                         continue
                     label = mid.replace("meta-llama/", "").replace("mistralai/", "").replace("google/", "").replace("thudm/", "")
-                    # Vision models
                     if any(kw in mid.lower() for kw in ["vision", "maverick", "scout"]):
                         vision_models.append({"id": mid, "name": label})
-                    # Everything else is a chat model
                     else:
                         chat_models.append({"id": mid, "name": label})
                 return {
@@ -76,3 +57,20 @@ async def get_available_models():
             return {"chat": [], "vision": [], "error": f"Groq API {resp.status_code}"}
     except Exception as e:
         return {"chat": [], "vision": [], "error": str(e)}
+
+
+@router.get("/{key}")
+async def get_setting(key: str):
+    result = supabase.table("settings").select("*").eq("key", key).execute()
+    if result.data:
+        return result.data[0]
+    return {"error": "Not found"}
+
+
+@router.post("/")
+async def update_setting(item: SettingsUpdate):
+    result = supabase.table("settings").upsert({
+        "key": item.key,
+        "value": item.value,
+    }).execute()
+    return result.data[0] if result.data else {}

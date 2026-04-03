@@ -12,7 +12,7 @@ export default function StudyModule({ date }: { date?: string }) {
     api.studySummary(date).then((s) => {
       setSummary(s);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, [date]);
 
   if (loading) return <ModuleCard title="Çalışma" emoji="📚" value="..." />;
@@ -21,8 +21,8 @@ export default function StudyModule({ date }: { date?: string }) {
     <ModuleCard
       title="Çalışma"
       emoji="📚"
-      value={`${summary?.total_hours} saat`}
-      subtitle={`Ortalama net: ${summary?.avg_net}`}
+      value={`${summary?.total_hours || 0} saat`}
+      subtitle={`Ortalama net: ${summary?.avg_net || 0}`}
       size="md"
       accentColor="neon"
     >
@@ -30,7 +30,7 @@ export default function StudyModule({ date }: { date?: string }) {
         {summary?.by_subject && Object.entries(summary.by_subject).map(([subj, mins]) => (
           <div key={subj} className="flex justify-between text-xs">
             <span className="text-gray-400">{subj}</span>
-            <span className="mono text-neon">{Math.round(mins as number / 60 * 10) / 10} saat</span>
+            <span className="mono text-neon">{Math.round((mins as number) / 60 * 10) / 10} saat</span>
           </div>
         ))}
       </div>

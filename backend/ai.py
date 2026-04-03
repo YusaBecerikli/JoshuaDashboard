@@ -70,44 +70,9 @@ async def _call_groq(model: str, messages: list, temperature: float, max_tokens:
                 # Unknown error, don't waste fallbacks
                 return None, error_str
 
-    return None, "Unexpected loop exit"
-
 DEFAULT_SYSTEM_PROMPT = """Sen Joshua'nın (Muhammed Yuşa Becerikli) kişisel asistanısın. 17 yaşında, Bingöl'de yaşıyor, Haziran'da YKS var, hedefi Sabancı Üniversitesi Bilgisayar Mühendisliği.
 
 Arkadaş gibi konuş. Türkçe. Kısa ve direkt. Gereksiz soru sorma.
-
-KRİTİK KURALLAR:
-- Kullanıcı veri söylediğinde ÖNCE aksiyonu çalıştır, sonra kısa cevap ver
-- Geçmiş zaman ("çalıştım", "uyudum") → direkt aksiyon
-- Gelecek zaman ("çalışacağım") → goal veya chat
-- Maksimum 1 soru sor, 0 daha iyi
-- Sağlık/ahlak dersi verme
-- "uzatma", "sadece kaydet" derlerse kısa kes
-- "nasılsın" → max 3 kelime cevap
-- Belirsiz mesajda en mantıklı aksiyonu tahmin et, sorma
-- Fotoğraf gönderilirse önce fotoğrafı analiz et, sonra aksiyon belirle
-- Kullanıcı hakkında kalıcı bilgi öğrenirsen update_memory aksiyonu kullan
-
-Aksiyonlar:
-- budget_add: {"type": "income"|"expense", "category": str, "amount": float, "description": str}
-- study_add: {"subject": str, "topic": str, "duration_minutes": int, "net_count": float}
-- sleep_log: {"sleep_time": "HH:MM", "wake_time": "HH:MM", "quality": int}
-- habit_log: {"habit_name": str, "completed": bool}
-- habit_add: {"name": str, "emoji": str, "frequency": "daily"|"weekly"}
-- goal_update: {"title": str, "progress": int, "status": str}
-- social_note: {"person_name": str, "relationship": str, "note": str}
-- daily_plan: {"tasks": [{"title": str, "done": bool, "priority": str}], "mood": int}
-- income_add: {"platform": str, "amount": float, "month": "YYYY-MM"}
-- exam_score_add: {"exam_type": "TYT"|"AYT", "subject": str, "net_score": float}
-- reminder_add: {"message": str, "remind_at": str}
-- delete_last: {"table": str}
-- module_add: {"module_key": str, "title": str, "schema": object}
-- update_memory: {"file": "profile"|"knowledge"|"history", "section": str, "content": str}
-- summarize: {"summary": str}  ← konuşma uzadıysa özetle
-- chat: {}
-
-Format (SADECE JSON, başka hiçbir şey):
-{"action": "action_tipi", "data": {...}, "reply": "kısa türkçe cevap"}
 
 Bellek:
 {MEMORY}
@@ -304,7 +269,15 @@ async def process(message: str, context: dict, image_url: Optional[str] = None) 
                 "reply": "AI servisinde sorun var, sonra dene.",
             }
 
-    text = response.choices[0].message.content.strip()
+    text = response.choices[0].message.content
+    if not text:
+        logger.warning("AI returned empty content")
+        return {
+            "action": "chat",
+            "data": {},
+            "reply": "Boş cevap geldi, tekrar dene.",
+        }
+    text = text.strip()
     logger.info(f"AI raw response: {text[:200]}")
 
     result = _parse_json(text)
@@ -328,21 +301,19 @@ async def watcher_analyze() -> Optional[str]:
     prompt = WATCHER_PROMPT.replace("{CONTEXT}", context_str)
     model = await get_ai_model()
 
-    try:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": f"Bellek:\n{memory[:1000]}\n\nDurumu analiz et."},
-            ],
-            temperature=0.5,
-            max_tokens=200,
-        )
-    except Exception as e:
-        logger.error(f"Watcher Groq error: {e}")
+    messages = [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": f"Bellek:\n{memory[:1000]}\n\nDurumu analiz et."},
+    ]
+
+    response, err = await _call_groq(model, messages, 0.5, 200)
+    if response is None:
+        logger.error(f"Watcher Groq error: {err}")
         return None
 
-    text = response.choices[0].message.content.strip()
+    text = response.choices[0].message.content
+    if not text:
+        return None
     result = _parse_json(text)
 
     if result and result.get("send") and result.get("message"):

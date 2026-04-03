@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 from typing import Optional
-from database import supabase
+from database import supabase, get_balance
 from datetime import date
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -11,18 +11,19 @@ async def get_dashboard(d: Optional[str] = Query(None, alias="date")):
     target_date = d or str(date.today())
 
     study = supabase.table("study_sessions").select("duration_minutes, net_count").eq("date", target_date).execute()
-    total_minutes = sum(r["duration_minutes"] or 0 for r in study.data)
-    avg_net = sum(r["net_count"] or 0 for r in study.data)
+    total_minutes = sum(r.get("duration_minutes") or 0 for r in (study.data or []))
+    nets = [r["net_count"] for r in (study.data or []) if r.get("net_count") is not None]
+    avg_net = round(sum(nets) / len(nets), 1) if nets else 0
     sleep = supabase.table("sleep_logs").select("sleep_time, wake_time, quality").eq("date", target_date).execute()
+    all_habits = supabase.table("habits").select("id").execute()
+    total_habit_count = len(all_habits.data or []) or 1
     habits = supabase.table("habit_logs").select("completed, habit_id").eq("date", target_date).execute()
-    completed = sum(1 for r in habits.data if r.get("completed"))
-    total_habits = len(habits.data) or 1
+    completed = sum(1 for r in (habits.data or []) if r.get("completed"))
 
-    from database import get_balance
     budget = supabase.table("budget").select("*").order("date", desc=True).limit(5).execute()
     study_sessions = supabase.table("study_sessions").select("*").eq("date", target_date).order("id", desc=True).limit(5).execute()
     sleep_logs = supabase.table("sleep_logs").select("*").eq("date", target_date).order("id", desc=True).limit(1).execute()
-    all_habits = supabase.table("habits").select("*").execute()
+    all_habits_full = supabase.table("habits").select("*").execute()
     goals = supabase.table("goals").select("*").eq("status", "active").execute()
     modules = supabase.table("custom_modules").select("*").eq("active", True).execute()
 
@@ -32,17 +33,17 @@ async def get_dashboard(d: Optional[str] = Query(None, alias="date")):
     return {
         "summary": {
             "study_minutes": total_minutes,
-            "avg_net": round(avg_net, 1) if study.data else 0,
+            "avg_net": avg_net,
             "sleep": sleep.data[-1] if sleep.data else None,
             "habits_completed": completed,
-            "habits_total": total_habits,
+            "habits_total": total_habit_count,
             "balance": round(get_balance(), 2),
         },
-        "recent_budget": budget.data,
-        "recent_study": study_sessions.data,
-        "recent_sleep": sleep_logs.data,
-        "habits": all_habits.data,
-        "goals": goals.data,
-        "custom_modules": modules.data,
+        "recent_budget": budget.data or [],
+        "recent_study": study_sessions.data or [],
+        "recent_sleep": sleep_logs.data or [],
+        "habits": all_habits_full.data or [],
+        "goals": goals.data or [],
+        "custom_modules": modules.data or [],
         "daily_plan": daily_plan,
     }

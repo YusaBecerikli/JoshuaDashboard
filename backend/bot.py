@@ -3,7 +3,9 @@ import json
 import asyncio
 import logging
 import base64
-from datetime import datetime, timedelta
+import re
+import random
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -165,7 +167,7 @@ async def handle_quick_command(callback: types.CallbackQuery):
         if countdowns.data:
             text = "⏳ Geri Sayımlar:\n\n"
             for c in countdowns.data:
-                days = (datetime.strptime(c["target_date"], "%Y-%m-%d").date() - datetime.now().date()).days
+                days = (datetime.strptime(c["target_date"], "%Y-%m-%d").date() - datetime.now(timezone.utc).replace(tzinfo=None).date()).days
                 text += f"{c.get('emoji', '⏳')} {c['title']}: {days} gün kaldı\n"
         else:
             text = "Henüz geri sayım yok."
@@ -246,8 +248,7 @@ async def handle_message(message: types.Message):
 
 def parse_remind_time(raw: str) -> str:
     """Convert relative time strings to absolute timestamps."""
-    import re
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     if re.match(r"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}", raw):
         return raw
@@ -273,19 +274,21 @@ def parse_remind_time(raw: str) -> str:
 
     try:
         return datetime.fromisoformat(raw).strftime("%Y-%m-%d %H:%M:%S")
-    except:
+    except (ValueError, TypeError):
         pass
 
     return (now + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
 
 
 async def execute_action(action: str, data: dict):
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if action == "budget_add":
         await _sync_db_call(lambda: supabase.table("budget").insert({
             "type": data.get("type", "expense"),
             "category": data.get("category"),
             "amount": data.get("amount"),
             "description": data.get("description"),
+            "date": data.get("date") or today_str,
         }).execute())
     elif action == "study_add":
         await _sync_db_call(lambda: supabase.table("study_sessions").insert({
@@ -294,6 +297,7 @@ async def execute_action(action: str, data: dict):
             "duration_minutes": data.get("duration_minutes"),
             "net_count": data.get("net_count"),
             "notes": data.get("notes"),
+            "date": data.get("date") or today_str,
         }).execute())
     elif action == "sleep_log":
         await _sync_db_call(lambda: supabase.table("sleep_logs").insert({
@@ -301,6 +305,7 @@ async def execute_action(action: str, data: dict):
             "wake_time": data.get("wake_time"),
             "quality": data.get("quality"),
             "notes": data.get("notes"),
+            "date": data.get("date") or today_str,
         }).execute())
     elif action == "habit_log":
         habit_name = data.get("habit_name")
@@ -335,6 +340,7 @@ async def execute_action(action: str, data: dict):
             "relationship": data.get("relationship"),
             "note": data.get("note"),
             "tags": data.get("tags", []),
+            "date": data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         }).execute())
     elif action == "daily_plan":
         from datetime import date
@@ -356,6 +362,7 @@ async def execute_action(action: str, data: dict):
             "amount": data.get("amount"),
             "month": data.get("month"),
             "notes": data.get("notes"),
+            "date": data.get("date") or today_str,
         }).execute())
     elif action == "module_add":
         await _sync_db_call(lambda: supabase.table("custom_modules").insert({
@@ -369,6 +376,7 @@ async def execute_action(action: str, data: dict):
             "exam_type": data.get("exam_type"),
             "subject": data.get("subject"),
             "net_score": data.get("net_score"),
+            "date": data.get("date") or today_str,
         }).execute())
     elif action == "reminder_add":
         raw_time = data.get("remind_at", "")
@@ -407,7 +415,7 @@ async def check_reminders():
     """Check and send due reminders every 30 seconds."""
     while True:
         try:
-            now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+            now = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%S")
             result = await _sync_db_call(
                 lambda: supabase.table("reminders").select("*").lte("remind_at", now).eq("sent", False).execute()
             )
@@ -444,82 +452,85 @@ async def weekly_summary():
     """Send weekly summary every Sunday at 21:00."""
     while True:
         try:
-            now = datetime.now()
-            if now.weekday() == 6 and now.hour == 21:  # Sunday 21:00
-                # Check if already sent today
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            # Only fire in the 21:00 minute window
+            if now.weekday() == 6 and now.hour == 21 and now.minute < 5:
                 last_sent = await _sync_db_call(
                     lambda: supabase.table("settings").select("value").eq("key", "last_weekly_summary").execute()
                 )
-                if last_sent.data and last_sent.data[0]["value"] == now.strftime("%Y-%m-%d"):
-                    await asyncio.sleep(3600)
-                    continue
+                if not last_sent.data or last_sent.data[0]["value"] != now.strftime("%Y-%m-%d"):
+                    week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+                    today = now.strftime("%Y-%m-%d")
 
-                # Gather week data
-                week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%d")
-                today = now.strftime("%Y-%m-%d")
+                    study = await _sync_db_call(
+                        lambda: supabase.table("study_sessions").select("duration_minutes, net_count").gte("date", week_ago).lte("date", today).execute()
+                    )
+                    total_hours = sum(r.get("duration_minutes") or 0 for r in (study.data or [])) / 60
+                    nets = [r["net_count"] for r in (study.data or []) if r.get("net_count") is not None]
+                    avg_net = round(sum(nets) / len(nets), 1) if nets else 0
 
-                study = await _sync_db_call(
-                    lambda: supabase.table("study_sessions").select("duration_minutes, net_count").gte("date", week_ago).lte("date", today).execute()
-                )
-                total_hours = sum(r["duration_minutes"] or 0 for r in study.data) / 60
-                nets = [r["net_count"] for r in study.data if r.get("net_count")]
-                avg_net = round(sum(nets) / len(nets), 1) if nets else 0
+                    budget = await _sync_db_call(
+                        lambda: supabase.table("budget").select("type, amount").gte("date", week_ago).lte("date", today).execute()
+                    )
+                    income = sum(r.get("amount") or 0 for r in (budget.data or []) if r.get("type") == "income")
+                    expense = sum(r.get("amount") or 0 for r in (budget.data or []) if r.get("type") == "expense")
 
-                budget = await _sync_db_call(
-                    lambda: supabase.table("budget").select("type, amount").gte("date", week_ago).lte("date", today).execute()
-                )
-                income = sum(r["amount"] or 0 for r in budget.data if r["type"] == "income")
-                expense = sum(r["amount"] or 0 for r in budget.data if r["type"] == "expense")
+                    habits = await _sync_db_call(
+                        lambda: supabase.table("habit_logs").select("completed").gte("date", week_ago).lte("date", today).execute()
+                    )
+                    done = sum(1 for r in (habits.data or []) if r.get("completed"))
+                    total = len(habits.data or []) or 1
 
-                habits = await _sync_db_call(
-                    lambda: supabase.table("habit_logs").select("completed").gte("date", week_ago).lte("date", today).execute()
-                )
-                done = sum(1 for r in habits.data if r.get("completed"))
-                total = len(habits.data) or 1
-
-                msg = (
-                    f"📊 Haftalık Özet ({week_ago} → {today}):\n\n"
-                    f"📚 {total_hours:.1f} saat çalışma | Ort. net: {avg_net}\n"
-                    f"💰 Gelir: {income} TL | Gider: {expense} TL\n"
-                    f"✅ Alışkanlıklar: {done}/{total} tamamlandı\n\n"
-                    f"İyi hafta Joshua! 💪"
-                )
-                await bot.send_message(ALLOWED_USER_ID, msg)
-
-                await _sync_db_call(
-                    lambda: supabase.table("settings").upsert({
-                        "key": "last_weekly_summary",
-                        "value": now.strftime("%Y-%m-%d"),
-                    }).execute()
-                )
-                logger.info("Weekly summary sent")
+                    msg = (
+                        f"📊 Haftalık Özet ({week_ago} → {today}):\n\n"
+                        f"📚 {total_hours:.1f} saat çalışma | Ort. net: {avg_net}\n"
+                        f"💰 Gelir: {income} TL | Gider: {expense} TL\n"
+                        f"✅ Alışkanlıklar: {done}/{total} tamamlandı\n\n"
+                        f"İyi hafta Joshua! 💪"
+                    )
+                    await bot.send_message(ALLOWED_USER_ID, msg)
+                    await _sync_db_call(
+                        lambda: supabase.table("settings").upsert({
+                            "key": "last_weekly_summary",
+                            "value": now.strftime("%Y-%m-%d"),
+                        }).execute()
+                    )
+                    logger.info("Weekly summary sent")
         except Exception as e:
             logger.error(f"Weekly summary error: {e}")
-        await asyncio.sleep(3600)
+        await asyncio.sleep(60)
 
 
 async def motivation_watcher():
-    """Send motivation messages when study hours are low."""
+    """Send motivation messages when study hours are low. Fires once per day at 20:00."""
     while True:
         try:
-            now = datetime.now()
-            # Check at 20:00 every day
-            if now.hour == 20:
-                ctx = get_today_summary()
-                study_hours = ctx["study_minutes"] / 60
-
-                if study_hours < 2:
-                    messages = [
-                        "Bugün biraz az çalıştın gibi. Yarın daha iyi olacak, merak etme 💪",
-                        "Her gün mükemmel olmak zorunda değilsin. Önemli olan devam etmek 🔥",
-                        "Bugün hafif geçti ama yarın yeni bir sayfa. Hadi yapalım bunu 📚",
-                    ]
-                    import random
-                    await bot.send_message(ALLOWED_USER_ID, random.choice(messages))
-                    logger.info("Motivation message sent")
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            today_str = now.strftime("%Y-%m-%d")
+            if now.hour == 20 and now.minute < 5:
+                last_mot = await _sync_db_call(
+                    lambda: supabase.table("settings").select("value").eq("key", "last_motivation").execute()
+                )
+                if not last_mot.data or last_mot.data[0]["value"] != today_str:
+                    ctx = get_today_summary()
+                    study_hours = ctx["study_minutes"] / 60
+                    if study_hours < 2:
+                        messages = [
+                            "Bugün biraz az çalıştın gibi. Yarın daha iyi olacak, merak etme 💪",
+                            "Her gün mükemmel olmak zorunda değilsin. Önemli olan devam etmek 🔥",
+                            "Bugün hafif geçti ama yarın yeni bir sayfa. Hadi yapalım bunu 📚",
+                        ]
+                        await bot.send_message(ALLOWED_USER_ID, random.choice(messages))
+                        await _sync_db_call(
+                            lambda: supabase.table("settings").upsert({
+                                "key": "last_motivation",
+                                "value": today_str,
+                            }).execute()
+                        )
+                        logger.info("Motivation message sent")
         except Exception as e:
             logger.error(f"Motivation watcher error: {e}")
-        await asyncio.sleep(3600)
+        await asyncio.sleep(60)
 
 
 async def main():

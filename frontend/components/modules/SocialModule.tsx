@@ -10,9 +10,9 @@ export default function SocialModule() {
 
   useEffect(() => {
     api.social().then((n) => {
-      setNotes(n.slice(0, 5));
+      setNotes(Array.isArray(n) ? n.slice(0, 5) : []);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, []);
 
   if (loading) return <ModuleCard title="Sosyal" emoji="👥" value="..." />;

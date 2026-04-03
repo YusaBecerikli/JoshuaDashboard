@@ -12,7 +12,7 @@ export default function IncomeModule() {
     api.incomeSummary().then((s) => {
       setSummary(s);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, []);
 
   if (loading) return <ModuleCard title="Online Gelir" emoji="💻" value="..." />;
@@ -21,7 +21,7 @@ export default function IncomeModule() {
     <ModuleCard
       title="Online Gelir"
       emoji="💻"
-      value={`${summary?.total.toLocaleString("tr-TR")} TL`}
+      value={`${summary?.total?.toLocaleString("tr-TR") || 0} TL`}
       size="sm"
       accentColor="neon-yellow"
     >

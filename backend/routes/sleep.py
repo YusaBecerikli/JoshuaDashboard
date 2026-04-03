@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Optional
 from database import supabase
+from datetime import date
 
 router = APIRouter(prefix="/api/sleep", tags=["sleep"])
 
@@ -20,7 +21,7 @@ async def get_sleep(d: Optional[str] = Query(None, alias="date")):
     if d:
         query = query.eq("date", d)
     result = query.execute()
-    return result.data
+    return {"data": result.data or []}
 
 
 @router.get("/summary")
@@ -29,8 +30,8 @@ async def get_sleep_summary(d: Optional[str] = Query(None, alias="date")):
     if d:
         query = query.eq("date", d)
     result = query.execute()
-    data = result.data
-    avg_quality = sum(r["quality"] or 5 for r in data) / len(data) if data else 0
+    data = result.data or []
+    avg_quality = sum(r.get("quality") or 5 for r in data) / len(data) if data else 0
     durations = []
     for r in data:
         if r.get("sleep_time") and r.get("wake_time"):
@@ -42,7 +43,7 @@ async def get_sleep_summary(d: Optional[str] = Query(None, alias="date")):
                 if wake_min < sleep_min:
                     wake_min += 24 * 60
                 durations.append((wake_min - sleep_min) / 60)
-            except:
+            except (ValueError, TypeError):
                 pass
     avg_sleep = sum(durations) / len(durations) if durations else 0
     return {
@@ -59,9 +60,9 @@ async def add_sleep(item: SleepCreate):
         "wake_time": item.wake_time,
         "quality": item.quality,
         "notes": item.notes,
-        "date": item.date,
+        "date": item.date or str(date.today()),
     }).execute()
-    return result.data[0]
+    return result.data[0] if result.data else {}
 
 
 @router.delete("/{item_id}")

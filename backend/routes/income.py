@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
 from database import supabase
+from datetime import date
 
 router = APIRouter(prefix="/api/income", tags=["income"])
 
@@ -18,22 +19,23 @@ class IncomeCreate(BaseModel):
 @router.get("/")
 async def get_income():
     result = supabase.table("online_income").select("*").order("date", desc=True).limit(100).execute()
-    return result.data
+    return {"data": result.data or []}
 
 
 @router.get("/summary")
 async def get_income_summary():
     result = supabase.table("online_income").select("*").execute()
+    data = result.data or []
     by_platform = {}
     total = 0
-    for r in result.data:
-        plat = r.get("platform", "Diğer")
-        by_platform[plat] = by_platform.get(plat, 0) + float(r["amount"] or 0)
-        total += float(r["amount"] or 0)
+    for r in data:
+        plat = r.get("platform") or "Diğer"
+        by_platform[plat] = by_platform.get(plat, 0) + float(r.get("amount") or 0)
+        total += float(r.get("amount") or 0)
     return {
         "total": round(total, 2),
         "by_platform": by_platform,
-        "recent": result.data[:10],
+        "recent": data[:10],
     }
 
 
@@ -45,9 +47,9 @@ async def add_income(item: IncomeCreate):
         "month": item.month,
         "monthly_target": item.monthly_target,
         "notes": item.notes,
-        "date": item.date,
+        "date": item.date or str(date.today()),
     }).execute()
-    return result.data[0]
+    return result.data[0] if result.data else {}
 
 
 @router.delete("/{item_id}")

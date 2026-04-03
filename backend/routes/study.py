@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Optional
 from database import supabase
+from datetime import date
 
 router = APIRouter(prefix="/api/study", tags=["study"])
 
@@ -21,7 +22,7 @@ async def get_study(d: Optional[str] = Query(None, alias="date")):
     if d:
         query = query.eq("date", d)
     result = query.execute()
-    return result.data
+    return {"data": result.data or []}
 
 
 @router.get("/summary")
@@ -30,18 +31,19 @@ async def get_study_summary(d: Optional[str] = Query(None, alias="date")):
     if d:
         query = query.eq("date", d)
     result = query.execute()
-    total_minutes = sum(r["duration_minutes"] or 0 for r in result.data)
-    total_nets = [r["net_count"] for r in result.data if r.get("net_count")]
+    data = result.data or []
+    total_minutes = sum(r.get("duration_minutes") or 0 for r in data)
+    total_nets = [r["net_count"] for r in data if r.get("net_count") is not None]
     by_subject = {}
-    for r in result.data:
-        subj = r.get("subject", "Diğer")
-        by_subject[subj] = by_subject.get(subj, 0) + (r["duration_minutes"] or 0)
+    for r in data:
+        subj = r.get("subject") or "Diğer"
+        by_subject[subj] = by_subject.get(subj, 0) + (r.get("duration_minutes") or 0)
     return {
         "total_minutes": total_minutes,
         "total_hours": round(total_minutes / 60, 1),
         "avg_net": round(sum(total_nets) / len(total_nets), 1) if total_nets else 0,
         "by_subject": by_subject,
-        "recent": result.data[:10],
+        "recent": data[:10],
     }
 
 
@@ -53,9 +55,9 @@ async def add_study(item: StudyCreate):
         "duration_minutes": item.duration_minutes,
         "net_count": item.net_count,
         "notes": item.notes,
-        "date": item.date,
+        "date": item.date or str(date.today()),
     }).execute()
-    return result.data[0]
+    return result.data[0] if result.data else {}
 
 
 @router.delete("/{item_id}")

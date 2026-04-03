@@ -20,7 +20,8 @@ function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === process.env.NEXT_PUBLIC_DASHBOARD_PASSWORD) {
+    const correctPassword = process.env.NEXT_PUBLIC_DASHBOARD_PASSWORD || "joshua2024";
+    if (password === correctPassword) {
       localStorage.setItem("dashboard_unlocked", "true");
       onUnlock();
     } else {
@@ -66,6 +67,7 @@ export default function Home() {
   });
   const [summary, setSummary] = useState<any>(null);
   const [customModules, setCustomModules] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (localStorage.getItem("dashboard_unlocked") === "true") {
@@ -81,12 +83,16 @@ export default function Home() {
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     Promise.all([
-      fetch(`${apiUrl}/api/dashboard/?date=${selectedDate}`).then((r) => r.json()),
-      fetch(`${apiUrl}/api/modules/`).then((r) => r.json()),
+      fetch(`${apiUrl}/api/dashboard?date=${selectedDate}`).then((r) => { if (!r.ok) throw new Error("Dashboard fetch failed"); return r.json(); }),
+      fetch(`${apiUrl}/api/modules`).then((r) => { if (!r.ok) throw new Error("Modules fetch failed"); return r.json(); }),
     ]).then(([d, m]) => {
       setSummary(d.summary);
-      setCustomModules(m);
-    }).catch(() => {});
+      setCustomModules(Array.isArray(m.data) ? m.data : []);
+      setError(null);
+    }).catch((err) => {
+      setError("Veriler yüklenemedi. API sunucusu çalışıyor mu?");
+      console.error(err);
+    });
   }, [selectedDate]);
 
   const changeDate = (days: number) => {
@@ -175,6 +181,9 @@ export default function Home() {
             <Link href="/charts" className="px-4 py-2 rounded-lg glass text-gray-400 text-sm hover:text-white transition-colors">
               Grafikler
             </Link>
+            <Link href="/notes" className="px-4 py-2 rounded-lg glass text-gray-400 text-sm hover:text-white transition-colors">
+              Notlar
+            </Link>
             <Link href="/settings" className="px-4 py-2 rounded-lg glass text-gray-400 text-sm hover:text-white transition-colors">
               Ayarlar
             </Link>
@@ -194,6 +203,16 @@ export default function Home() {
               {summary.sleep && (
                 <span>😴 {summary.sleep.sleep_time} → {summary.sleep.wake_time}</span>
               )}
+            </motion.div>
+          )}
+
+          {error && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="mt-4 p-3 bg-red-900/30 border border-red-500/30 rounded-lg text-sm text-red-400"
+            >
+              {error}
             </motion.div>
           )}
         </motion.header>
@@ -220,7 +239,7 @@ export default function Home() {
           transition={{ delay: 0.5 }}
           className="mt-12 text-center text-xs text-gray-700"
         >
-          Telegram botu ile güncelle · Veriler Supabase'de saklanır
+          Telegram botu ile güncelle · Veriler Supabase&apos;de saklanır
         </motion.footer>
       </main>
     </div>

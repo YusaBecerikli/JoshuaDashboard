@@ -12,26 +12,33 @@ export default function CustomModuleCard({ module }: { module: any }) {
 
   useEffect(() => {
     api.getModuleData(module.module_key).then((d) => {
-      setData(d);
+      setData(Array.isArray(d) ? d : []);
+      setLoading(false);
+    }).catch(() => {
+      setData([]);
       setLoading(false);
     });
   }, [module.module_key]);
 
   const handleAdd = async () => {
     if (!inputValue.trim()) return;
-    const schema = module.schema || {};
-    let payload: any = {};
-    if (schema.type === "counter") {
-      payload = { value: parseInt(inputValue) || 1 };
-    } else if (schema.type === "text") {
-      payload = { text: inputValue };
-    } else {
-      payload = { value: inputValue };
+    try {
+      const schema = module.schema || {};
+      let payload: any = {};
+      if (schema.type === "counter") {
+        payload = { value: parseInt(inputValue) || 1 };
+      } else if (schema.type === "text") {
+        payload = { text: inputValue };
+      } else {
+        payload = { value: inputValue };
+      }
+      await api.addModuleData(module.module_key, payload);
+      const updated = await api.getModuleData(module.module_key);
+      setData(Array.isArray(updated) ? updated : []);
+      setInputValue("");
+    } catch (e) {
+      console.error("Custom module add error:", e);
     }
-    await api.addModuleData(module.module_key, payload);
-    const updated = await api.getModuleData(module.module_key);
-    setData(updated);
-    setInputValue("");
   };
 
   const schema = module.schema || {};

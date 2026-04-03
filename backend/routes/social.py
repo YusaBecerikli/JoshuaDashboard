@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Optional, List
 from database import supabase
+from datetime import date
 
 router = APIRouter(prefix="/api/social", tags=["social"])
 
@@ -15,9 +16,12 @@ class SocialCreate(BaseModel):
 
 
 @router.get("/")
-async def get_social():
-    result = supabase.table("social_notes").select("*").order("date", desc=True).limit(50).execute()
-    return result.data
+async def get_social(d: Optional[str] = Query(None, alias="date")):
+    query = supabase.table("social_notes").select("*").order("date", desc=True).limit(50)
+    if d:
+        query = query.eq("date", d)
+    result = query.execute()
+    return {"data": result.data or []}
 
 
 @router.post("/")
@@ -27,9 +31,9 @@ async def add_social(item: SocialCreate):
         "relationship": item.relationship,
         "note": item.note,
         "tags": item.tags or [],
-        "date": item.date,
+        "date": item.date or str(date.today()),
     }).execute()
-    return result.data[0]
+    return result.data[0] if result.data else {}
 
 
 @router.delete("/{item_id}")

@@ -15,7 +15,7 @@ class CountdownCreate(BaseModel):
 @router.get("/")
 async def get_countdowns():
     result = supabase.table("countdowns").select("*").order("target_date").execute()
-    return result.data
+    return {"data": result.data or []}
 
 
 @router.post("/")
@@ -25,7 +25,7 @@ async def add_countdown(item: CountdownCreate):
         "target_date": item.target_date,
         "emoji": item.emoji,
     }).execute()
-    return result.data[0]
+    return result.data[0] if result.data else {}
 
 
 @router.delete("/{countdown_id}")

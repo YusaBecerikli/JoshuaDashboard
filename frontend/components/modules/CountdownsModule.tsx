@@ -9,12 +9,13 @@ export default function CountdownsModule() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/countdowns/`)
-      .then((r) => r.json())
-      .then((c) => {
-        setCountdowns(c);
-        setLoading(false);
-      });
+    api.countdowns().then((c) => {
+      setCountdowns(Array.isArray(c) ? c : []);
+      setLoading(false);
+    }).catch(() => {
+      setCountdowns([]);
+      setLoading(false);
+    });
   }, []);
 
   if (loading) return <ModuleCard title="Geri Sayım" emoji="⏳" value="..." />;
@@ -30,11 +31,12 @@ export default function CountdownsModule() {
       <div className="mt-3 space-y-2">
         {countdowns.map((c) => {
           const days = Math.ceil((new Date(c.target_date).getTime() - Date.now()) / 86400000);
+          const isPast = days < 0;
           return (
             <div key={c.id} className="flex justify-between text-xs py-1 border-b border-gray-800">
               <span className="text-gray-300">{c.emoji} {c.title}</span>
-              <span className={`mono ${days <= 7 ? "text-neon-pink" : days <= 30 ? "text-neon-yellow" : "text-neon-green"}`}>
-                {days} gün
+              <span className={`mono ${isPast ? "text-gray-600" : days <= 7 ? "text-neon-pink" : days <= 30 ? "text-neon-yellow" : "text-neon-green"}`}>
+                {isPast ? "Tamamlandı" : `${days} gün`}
               </span>
             </div>
           );

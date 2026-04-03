@@ -10,16 +10,20 @@ export default function HabitModule({ date }: { date?: string }) {
 
   useEffect(() => {
     api.habits(date).then((h) => {
-      setHabits(h);
+      setHabits(Array.isArray(h) ? h : []);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, [date]);
 
   const toggleHabit = async (id: number, current: boolean) => {
-    await api.logHabit(id, { completed: !current, date });
-    setHabits((prev) =>
-      prev.map((h) => (h.id === id ? { ...h, completed_today: !current } : h))
-    );
+    try {
+      await api.logHabit(id, { completed: !current, date });
+      setHabits((prev) =>
+        prev.map((h) => (h.id === id ? { ...h, completed_today: !current } : h))
+      );
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   if (loading) return <ModuleCard title="Alışkanlıklar" emoji="✅" value="..." />;

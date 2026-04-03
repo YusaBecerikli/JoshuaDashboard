@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Optional
 from database import supabase
+from datetime import date
 
 router = APIRouter(prefix="/api/scores", tags=["scores"])
 
@@ -17,7 +18,7 @@ class ScoreCreate(BaseModel):
 @router.get("/tyt")
 async def get_tyt_scores():
     result = supabase.table("exam_scores").select("*").eq("exam_type", "TYT").order("date").execute()
-    return result.data
+    return {"data": result.data or []}
 
 
 @router.post("/tyt")
@@ -26,16 +27,16 @@ async def add_tyt_score(item: ScoreCreate):
         "exam_type": "TYT",
         "subject": item.subject,
         "net_score": item.net_score,
-        "date": item.date,
+        "date": item.date or str(date.today()),
         "notes": item.notes,
     }).execute()
-    return result.data[0]
+    return result.data[0] if result.data else {}
 
 
 @router.get("/ayt")
 async def get_ayt_scores():
     result = supabase.table("exam_scores").select("*").eq("exam_type", "AYT").order("date").execute()
-    return result.data
+    return {"data": result.data or []}
 
 
 @router.post("/ayt")
@@ -44,10 +45,10 @@ async def add_ayt_score(item: ScoreCreate):
         "exam_type": "AYT",
         "subject": item.subject,
         "net_score": item.net_score,
-        "date": item.date,
+        "date": item.date or str(date.today()),
         "notes": item.notes,
     }).execute()
-    return result.data[0]
+    return result.data[0] if result.data else {}
 
 
 @router.delete("/{item_id}")

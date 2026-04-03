@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-from typing import Optional
 from database import supabase
 
 router = APIRouter(prefix="/api/reminders", tags=["reminders"])
@@ -14,7 +13,7 @@ class ReminderCreate(BaseModel):
 @router.get("/")
 async def get_reminders():
     result = supabase.table("reminders").select("*").eq("sent", False).order("remind_at").execute()
-    return result.data
+    return {"data": result.data or []}
 
 
 @router.post("/")
@@ -23,7 +22,7 @@ async def add_reminder(item: ReminderCreate):
         "message": item.message,
         "remind_at": item.remind_at,
     }).execute()
-    return result.data[0]
+    return result.data[0] if result.data else {}
 
 
 @router.delete("/{reminder_id}")

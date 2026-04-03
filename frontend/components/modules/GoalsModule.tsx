@@ -10,9 +10,9 @@ export default function GoalsModule() {
 
   useEffect(() => {
     api.goals().then((g) => {
-      setGoals(g);
+      setGoals(Array.isArray(g) ? g : []);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, []);
 
   if (loading) return <ModuleCard title="Hedefler" emoji="🎯" value="..." />;
@@ -35,7 +35,7 @@ export default function GoalsModule() {
             <div className="w-full bg-gray-800 rounded-full h-1.5">
               <div
                 className="bg-gradient-to-r from-neon-orange to-neon-pink h-1.5 rounded-full transition-all duration-500"
-                style={{ width: `${goal.progress}%` }}
+                style={{ width: `${Math.min(100, Math.max(0, goal.progress || 0))}%` }}
               />
             </div>
             {goal.deadline && (

@@ -22,32 +22,33 @@ export default function SettingsPage() {
   const [modelsLoading, setModelsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (localStorage.getItem("settings_unlocked") === "true") {
+    if (localStorage.getItem("dashboard_unlocked") === "true") {
       setAuthenticated(true);
     }
   }, []);
 
   useEffect(() => {
-    if (authenticated) {
-      Promise.all([
-        api.settings(),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/settings/models/list`).then((r) => r.json()),
-      ]).then(([s, m]) => {
-        setSystemPrompt(s.system_prompt || "");
-        setAiModel(s.ai_model || "");
-        setVisionModel(s.vision_model || "");
-        setChatModels(m.chat || []);
-        setVisionModels(m.vision || []);
-        setModelsLoading(false);
-      }).catch(() => setModelsLoading(false));
-    }
+    if (!authenticated) return;
+    Promise.all([
+      api.settings().catch(() => ({})),
+      api.modelsList().catch(() => ({ chat: [], vision: [] })),
+    ]).then(([s, m]) => {
+      setSystemPrompt(s.system_prompt || "");
+      setAiModel(s.ai_model || "");
+      setVisionModel(s.vision_model || "");
+      setChatModels(Array.isArray(m.chat) ? m.chat : []);
+      setVisionModels(Array.isArray(m.vision) ? m.vision : []);
+      setModelsLoading(false);
+    }).catch(() => setModelsLoading(false));
   }, [authenticated]);
 
   const handlePassword = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === process.env.NEXT_PUBLIC_SETTINGS_PASSWORD) {
+    const correctPassword = process.env.NEXT_PUBLIC_SETTINGS_PASSWORD || "joshua2024";
+    if (password === correctPassword) {
       localStorage.setItem("settings_unlocked", "true");
       setAuthenticated(true);
     } else {
@@ -58,12 +59,21 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    await api.updateSetting({ key: "system_prompt", value: systemPrompt });
-    await api.updateSetting({ key: "ai_model", value: aiModel });
-    await api.updateSetting({ key: "vision_model", value: visionModel });
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setSaveError(null);
+    try {
+      await Promise.all([
+        api.updateSetting({ key: "system_prompt", value: systemPrompt }),
+        api.updateSetting({ key: "ai_model", value: aiModel }),
+        api.updateSetting({ key: "vision_model", value: visionModel }),
+      ]);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setSaveError("Ayarlar kaydedilemedi.");
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!authenticated) {
@@ -91,7 +101,7 @@ export default function SettingsPage() {
             Giriş
           </button>
           <Link href="/" className="block text-center text-xs text-gray-500 mt-4 hover:text-gray-300">
-            ← Dashboard'a dön
+            ← Dashboard&apos;a dön
           </Link>
         </motion.form>
       </div>
@@ -115,16 +125,25 @@ export default function SettingsPage() {
             <Link href="/charts" className="px-4 py-2 rounded-lg glass text-gray-400 text-sm hover:text-white transition-colors">
               Grafikler
             </Link>
+            <Link href="/notes" className="px-4 py-2 rounded-lg glass text-gray-400 text-sm hover:text-white transition-colors">
+              Notlar
+            </Link>
             <Link href="/settings" className="px-4 py-2 rounded-lg bg-accent/20 text-accent text-sm font-medium border border-accent/30">
               Ayarlar
             </Link>
           </div>
         </motion.header>
 
+        {saveError && (
+          <div className="mb-4 p-3 bg-red-900/30 border border-red-500/30 rounded-lg text-sm text-red-400">
+            {saveError}
+          </div>
+        )}
+
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass p-6 mb-6">
           <h2 className="text-lg font-semibold mb-2">Sohbet Modeli</h2>
           <p className="text-xs text-gray-500 mb-4">
-            Normal mesajlar için kullanılan model. Groq'dan canlı çekilir.
+            Normal mesajlar için kullanılan model. Groq&apos;dan canlı çekilir.
           </p>
           {modelsLoading ? (
             <div className="text-sm text-gray-500">Modeller yükleniyor...</div>
