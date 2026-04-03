@@ -12,13 +12,13 @@ class CountdownCreate(BaseModel):
     emoji: Optional[str] = "⏳"
 
 
-@router.get("/")
+@router.get("")
 async def get_countdowns():
     result = supabase.table("countdowns").select("*").order("target_date").execute()
     return {"data": result.data or []}
 
 
-@router.post("/")
+@router.post("")
 async def add_countdown(item: CountdownCreate):
     result = supabase.table("countdowns").insert({
         "title": item.title,

@@ -20,13 +20,13 @@ class ModuleDataCreate(BaseModel):
     date: Optional[str] = None
 
 
-@router.get("/")
+@router.get("")
 async def get_modules():
     result = supabase.table("custom_modules").select("*").eq("active", True).execute()
     return {"data": result.data or []}
 
 
-@router.post("/")
+@router.post("")
 async def add_module(item: ModuleCreate):
     result = supabase.table("custom_modules").insert({
         "module_key": item.module_key,

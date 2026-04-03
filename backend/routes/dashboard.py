@@ -6,7 +6,7 @@ from datetime import date
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
-@router.get("/")
+@router.get("")
 async def get_dashboard(d: Optional[str] = Query(None, alias="date")):
     target_date = d or str(date.today())
 

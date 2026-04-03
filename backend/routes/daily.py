@@ -20,7 +20,7 @@ class DailyCreate(BaseModel):
     date: Optional[str] = None
 
 
-@router.get("/")
+@router.get("")
 async def get_daily(d: Optional[str] = Query(None, alias="date")):
     target_date = d or str(date.today())
     result = supabase.table("daily_plans").select("*").eq("date", target_date).execute()
@@ -29,7 +29,7 @@ async def get_daily(d: Optional[str] = Query(None, alias="date")):
     return {"date": target_date, "tasks": [], "notes": None, "mood": None}
 
 
-@router.post("/")
+@router.post("")
 async def update_daily(item: DailyCreate):
     target_date = item.date or str(date.today())
     data = {

@@ -16,7 +16,7 @@ class IncomeCreate(BaseModel):
     date: Optional[str] = None
 
 
-@router.get("/")
+@router.get("")
 async def get_income():
     result = supabase.table("online_income").select("*").order("date", desc=True).limit(100).execute()
     return {"data": result.data or []}
@@ -39,7 +39,7 @@ async def get_income_summary():
     }
 
 
-@router.post("/")
+@router.post("")
 async def add_income(item: IncomeCreate):
     result = supabase.table("online_income").insert({
         "platform": item.platform,

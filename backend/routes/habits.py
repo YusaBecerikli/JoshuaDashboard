@@ -18,7 +18,7 @@ class HabitLog(BaseModel):
     date: Optional[str] = None
 
 
-@router.get("/")
+@router.get("")
 async def get_habits(d: Optional[str] = Query(None, alias="date")):
     habits = supabase.table("habits").select("*").order("id").execute()
     target_date = d or str(date.today())
@@ -33,7 +33,7 @@ async def get_habits(d: Optional[str] = Query(None, alias="date")):
     return result
 
 
-@router.post("/")
+@router.post("")
 async def add_habit(item: HabitCreate):
     result = supabase.table("habits").insert({
         "name": item.name,

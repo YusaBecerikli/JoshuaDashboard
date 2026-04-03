@@ -22,13 +22,13 @@ class GoalUpdate(BaseModel):
     status: Optional[str] = None
 
 
-@router.get("/")
+@router.get("")
 async def get_goals():
     result = supabase.table("goals").select("*").order("id", desc=True).execute()
     return {"data": result.data or []}
 
 
-@router.post("/")
+@router.post("")
 async def add_goal(item: GoalCreate):
     result = supabase.table("goals").insert({
         "title": item.title,

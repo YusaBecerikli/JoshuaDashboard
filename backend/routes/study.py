@@ -16,7 +16,7 @@ class StudyCreate(BaseModel):
     date: Optional[str] = None
 
 
-@router.get("/")
+@router.get("")
 async def get_study(d: Optional[str] = Query(None, alias="date")):
     query = supabase.table("study_sessions").select("*").order("date", desc=True).limit(100)
     if d:
@@ -47,7 +47,7 @@ async def get_study_summary(d: Optional[str] = Query(None, alias="date")):
     }
 
 
-@router.post("/")
+@router.post("")
 async def add_study(item: StudyCreate):
     result = supabase.table("study_sessions").insert({
         "subject": item.subject,

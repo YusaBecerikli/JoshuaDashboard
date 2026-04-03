@@ -15,7 +15,7 @@ class SocialCreate(BaseModel):
     date: Optional[str] = None
 
 
-@router.get("/")
+@router.get("")
 async def get_social(d: Optional[str] = Query(None, alias="date")):
     query = supabase.table("social_notes").select("*").order("date", desc=True).limit(50)
     if d:
@@ -24,7 +24,7 @@ async def get_social(d: Optional[str] = Query(None, alias="date")):
     return {"data": result.data or []}
 
 
-@router.post("/")
+@router.post("")
 async def add_social(item: SocialCreate):
     result = supabase.table("social_notes").insert({
         "person_name": item.person_name,

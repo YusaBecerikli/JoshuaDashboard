@@ -14,7 +14,7 @@ class SettingsUpdate(BaseModel):
     value: str
 
 
-@router.get("/")
+@router.get("")
 async def get_settings():
     result = supabase.table("settings").select("*").execute()
     return {r["key"]: r["value"] for r in (result.data or [])}
@@ -67,7 +67,7 @@ async def get_setting(key: str):
     return {"error": "Not found"}
 
 
-@router.post("/")
+@router.post("")
 async def update_setting(item: SettingsUpdate):
     result = supabase.table("settings").upsert({
         "key": item.key,

@@ -15,7 +15,7 @@ class BudgetCreate(BaseModel):
     date: Optional[str] = None
 
 
-@router.get("/")
+@router.get("")
 async def get_budget(d: Optional[str] = Query(None, alias="date")):
     query = supabase.table("budget").select("*").order("date", desc=True).limit(100)
     if d:
@@ -48,7 +48,7 @@ async def get_budget_summary(d: Optional[str] = Query(None, alias="date")):
     }
 
 
-@router.post("/")
+@router.post("")
 async def add_budget(item: BudgetCreate):
     result = supabase.table("budget").insert({
         "type": item.type,

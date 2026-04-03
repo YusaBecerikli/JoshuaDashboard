@@ -10,13 +10,13 @@ class ReminderCreate(BaseModel):
     remind_at: str
 
 
-@router.get("/")
+@router.get("")
 async def get_reminders():
     result = supabase.table("reminders").select("*").eq("sent", False).order("remind_at").execute()
     return {"data": result.data or []}
 
 
-@router.post("/")
+@router.post("")
 async def add_reminder(item: ReminderCreate):
     result = supabase.table("reminders").insert({
         "message": item.message,

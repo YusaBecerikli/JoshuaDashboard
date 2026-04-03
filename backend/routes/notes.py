@@ -11,13 +11,13 @@ class NoteCreate(BaseModel):
     tags: Optional[List[str]] = None
 
 
-@router.get("/")
+@router.get("")
 async def get_notes():
     result = supabase.table("notes").select("*").order("id", desc=True).execute()
     return {"data": result.data or []}
 
 
-@router.post("/")
+@router.post("")
 async def add_note(item: NoteCreate):
     result = supabase.table("notes").insert({
         "content": item.content,

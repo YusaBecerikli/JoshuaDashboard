@@ -15,7 +15,7 @@ class SleepCreate(BaseModel):
     date: Optional[str] = None
 
 
-@router.get("/")
+@router.get("")
 async def get_sleep(d: Optional[str] = Query(None, alias="date")):
     query = supabase.table("sleep_logs").select("*").order("date", desc=True).limit(30)
     if d:
@@ -53,7 +53,7 @@ async def get_sleep_summary(d: Optional[str] = Query(None, alias="date")):
     }
 
 
-@router.post("/")
+@router.post("")
 async def add_sleep(item: SleepCreate):
     result = supabase.table("sleep_logs").insert({
         "sleep_time": item.sleep_time,
