@@ -13,7 +13,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("main")
 
-REQUIRED_ENVS = ["SUPABASE_URL", "SUPABASE_KEY", "GROQ_API_KEY", "TELEGRAM_TOKEN", "TELEGRAM_USER_ID", "API_SECRET_KEY"]
+REQUIRED_ENVS = ["SUPABASE_URL", "SUPABASE_KEY", "GROQ_API_KEY", "TELEGRAM_TOKEN", "TELEGRAM_USER_ID"]
 missing = [e for e in REQUIRED_ENVS if not os.getenv(e)]
 if missing:
     logger.error(f"Missing required environment variables: {', '.join(missing)}")

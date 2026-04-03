@@ -542,8 +542,18 @@ async def main():
         await asyncio.to_thread(init_memory)
     except Exception as e:
         logger.error(f"Memory init failed: {e}")
+
+    # Wait a few seconds before polling to let any old instance release the connection
+    await asyncio.sleep(5)
+
+    # Delete webhook to ensure polling mode (prevents Conflict errors)
+    try:
+        await bot.delete_webhook()
+    except Exception as e:
+        logger.warning(f"Could not delete webhook: {e}")
+
     logger.info("Bot started with reminder checker + watcher + memory (Supabase)")
-    await dp.start_polling(bot, handle_signals=False)
+    await dp.start_polling(bot, skip_updates=True, handle_signals=False)
 
 
 if __name__ == "__main__":
